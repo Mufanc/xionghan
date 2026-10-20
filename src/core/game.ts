@@ -51,6 +51,10 @@ export class Game {
         return this.state.winner ? [] : this.rules.findLegalMoves(from);
     }
 
+    findForbiddenMoves(from: Index): Index[] {
+        return this.state.winner ? [] : this.rules.findForbiddenMoves(from);
+    }
+
     isCheck(side: Side): boolean {
         return this.rules.isCheck(side);
     }

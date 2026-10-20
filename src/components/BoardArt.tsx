@@ -88,7 +88,8 @@ export function BoardArt() {
                             x={x}
                             y="651"
                             fontSize="18"
-                            fontFamily="serif"
+                            fontWeight="700"
+                            fontFamily="BoardColumns, serif"
                             textAnchor="middle"
                             dominantBaseline="middle"
                         >

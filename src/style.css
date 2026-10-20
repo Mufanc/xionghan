@@ -1,3 +1,19 @@
+@font-face {
+    font-family: 'BoardColumns';
+    src: url('./assets/fonts/board-columns.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Pieces';
+    src: url('./assets/fonts/pieces.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+}
+
 :root {
     font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
     color: #34352e;
@@ -90,6 +106,11 @@ h1 small {
     border-color: #8e8a7d;
     background: #fffdf7;
 }
+.new-game > .sound-toggle[aria-checked='true'] {
+    color: #315db1;
+    border-color: #a8bce0;
+    background: #eef3fb;
+}
 .play-area {
     width: min(100%, calc(100dvh - 225px));
     min-width: 260px;
@@ -160,55 +181,155 @@ i {
 .piece {
     width: 92%;
     height: 92%;
-    border: max(1px, 0.25vw) solid currentColor;
     border-radius: 50%;
-    background: #eee;
-    padding: 6%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 1px 2px #332b2520;
-}
-.piece > span {
     display: grid;
     place-items: center;
+    box-shadow: 0 1px 2px #332b2520;
+}
+.piece > svg {
     width: 100%;
     height: 100%;
-    border: 1.5px solid currentColor;
-    border-radius: 50%;
-    font-family: 'Kaiti SC', STKaiti, KaiTi, 'Songti SC', serif;
+    stroke: currentColor;
+}
+.piece-face {
+    fill: #eee;
+}
+.piece text {
+    fill: currentColor;
+    stroke: none;
+    font-family: 'Pieces', 'Kaiti SC', STKaiti, KaiTi, 'Songti SC', serif;
     font-weight: 700;
-    font-size: clamp(13px, min(3.1vw, 3.4dvh), 38px);
-    line-height: 1;
+}
+.point.selected {
+    z-index: 1;
+}
+.point.selected .piece {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px #332b2530;
+}
+.point.selected .piece-face {
+    fill: #fff9eb;
 }
 .point.selected::after {
     content: '';
     position: absolute;
-    inset: 1%;
-    border: 2px solid #315db1;
-    border-radius: 4px;
+    inset: 0;
+    border: 3px solid #315db1;
+    border-radius: 50%;
+    transform: translateY(-2px);
+    box-shadow: 0 0 0 3px #fff9eb;
     pointer-events: none;
 }
-.point.last {
-    background: #45719628;
+.last-from-mark {
+    position: absolute;
+    width: 26%;
+    aspect-ratio: 1;
+    border: 3px solid #3b5268;
+    border-radius: 50%;
+    background: #ffe4c4;
+    box-shadow: 0 0 0 2px #fff9eb;
+    pointer-events: none;
+}
+.last-to-mark {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    fill: none;
+    stroke: #3b5268;
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+}
+.last-to-outline {
+    stroke: #fff9eb;
+    stroke-width: 8;
+}
+.point.selected .last-to-mark {
+    visibility: hidden;
 }
 .point.checked .piece {
-    background: #ffe0cf;
-    box-shadow: 0 0 12px #b91c1c70;
+    box-shadow:
+        0 0 12px 5px #b91c1c99,
+        0 0 24px 8px #b91c1c4d;
+    animation: king-check 360ms ease-in-out infinite;
+}
+.point.defeated .piece {
+    filter: grayscale(1);
+    animation: king-defeat 80ms ease-in-out 6;
+}
+.point > .piece:not(.captured-piece) {
+    position: relative;
+    z-index: 1;
+}
+.piece.captured-piece {
+    position: absolute;
+    inset: 4%;
+    z-index: 0;
+    pointer-events: none;
+    animation: captured-fade 220ms ease-out forwards;
+}
+@keyframes captured-fade {
+    to {
+        opacity: 0;
+    }
+}
+@keyframes king-defeat {
+    0%,
+    50%,
+    100% {
+        translate: 0 0;
+    }
+    25% {
+        translate: 8% 0;
+    }
+    75% {
+        translate: -8% 0;
+    }
+}
+.point.unavailable:not(.checked) .piece {
+    filter: brightness(0.88);
+}
+.point.unavailable {
+    cursor: default;
+}
+@keyframes king-check {
+    0%,
+    50%,
+    100% {
+        rotate: 0deg;
+    }
+    25% {
+        rotate: 4deg;
+    }
+    75% {
+        rotate: -4deg;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .point.checked .piece,
+    .point.defeated .piece {
+        animation: none;
+    }
 }
 .move-mark {
     position: absolute;
     width: 21%;
     aspect-ratio: 1;
     border-radius: 50%;
-    background: #315db1c9;
-    box-shadow: 0 0 0 4px #f9f6ed66;
+    background: #315db1;
+    box-shadow: 0 0 0 4px #f9f6ed;
     pointer-events: none;
+}
+.forbidden-mark {
+    background: #c52f38;
+    box-shadow: 0 0 0 4px #fff;
 }
 .capture-mark {
     position: absolute;
     inset: 0;
-    border: 3px dashed #315db1;
+    border: 5px dashed #315db1;
     border-radius: 50%;
     pointer-events: none;
 }
@@ -243,6 +364,7 @@ i {
     .topbar {
         padding: 0 6px;
         margin-bottom: 18px;
+        flex-wrap: wrap;
     }
     .play-area {
         width: 100%;
@@ -253,13 +375,6 @@ i {
         align-items: flex-start;
         flex-direction: column;
         gap: 8px;
-    }
-    .piece {
-        border-width: 2px;
-    }
-    .piece > span {
-        border-width: 1px;
-        font-size: clamp(12px, 3.8vw, 23px);
     }
     .new-game > span {
         position: absolute;

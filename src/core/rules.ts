@@ -198,6 +198,12 @@ export class Rules {
         });
     }
 
+    findForbiddenMoves(from: Index): Index[] {
+        const legal = this.findLegalMoves(from);
+
+        return this.candidateMoves(from).filter((to) => !legal.includes(to));
+    }
+
     hasLegalMove(side: Side): boolean {
         return this.board.data.some(
             (piece, from) => piece?.side === side && this.findLegalMoves(from).length > 0,

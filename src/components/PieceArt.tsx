@@ -1,0 +1,13 @@
+import { Piece } from '@/core/piece';
+
+export function PieceArt({ piece }: { piece: Piece }) {
+    return (
+        <svg viewBox="0 0 100 100" aria-hidden="true">
+            <circle className="piece-face" cx="50" cy="50" r="47" strokeWidth="3.5" />
+            <circle cx="50" cy="50" r="38" fill="none" strokeWidth="1.5" />
+            <text x="50" y="50" fontSize="50" textAnchor="middle" dominantBaseline="central">
+                {Piece.nameOf(piece.side, piece.kind)}
+            </text>
+        </svg>
+    );
+}

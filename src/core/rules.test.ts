@@ -217,6 +217,26 @@ describe('king safety and endings', () => {
         expect(new Rules(new Board(board)).findLegalMoves(p(6, 8))).not.toContain(p(5, 8));
     });
 
+    it('marks sideways pawn moves as forbidden only while they expose facing kings', () => {
+        const data = fixture(
+            [Side.Black, Kind.King, 6, 1],
+            [Side.Red, Kind.King, 6, 11],
+            [Side.Black, Kind.Pawn, 6, 7],
+        );
+        const board = new Board(data);
+        const rules = new Rules(board);
+        const from = p(6, 7);
+        const snapshot = data.slice();
+        expect(rules.findForbiddenMoves(from)).toEqual([p(5, 7), p(7, 7)]);
+        expect(rules.findLegalMoves(from)).toEqual([p(6, 8)]);
+        expect(rules.findForbiddenMoves(p(0, 0))).toEqual([]);
+        expect(data).toEqual(snapshot);
+        board.move(p(6, 11), p(5, 11));
+        expect(rules.findForbiddenMoves(from)).toEqual([]);
+        expect(rules.findLegalMoves(from)).toContain(p(5, 7));
+        expect(rules.findLegalMoves(from)).toContain(p(7, 7));
+    });
+
     it('detects a pawn attacking a king directly in front', () => {
         const board = fixture(...kings, [Side.Black, Kind.Pawn, 6, 10]);
         expect(new Rules(new Board(board)).isCheck(Side.Red)).toBe(true);

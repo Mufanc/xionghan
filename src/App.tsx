@@ -1,10 +1,13 @@
 import { useState, type KeyboardEvent } from 'react';
 import { Client, type BoardProps } from 'boardgame.io/react';
 import { BoardArt } from '@/components/BoardArt';
+import { PieceArt } from '@/components/PieceArt';
 import { gameConfig, playerSide } from '@/adapters/boardgame';
 import { Board, type Index } from '@/core/board';
 import { Side, Kind, Piece } from '@/core/piece';
 import { Game, type GameState } from '@/core/game';
+import { useGameSounds } from '@/hooks/use-game-sounds';
+import { useMoveAnimation } from '@/hooks/use-move-animation';
 
 const hints: Record<Kind, string> = {
     [Kind.King]: '宫内直走一格；两王不可照面。',
@@ -22,34 +25,44 @@ const hints: Record<Kind, string> = {
 function GameBoard({ G, ctx, moves, reset }: BoardProps<GameState>) {
     const [selected, setSelected] = useState<Index | null>(null);
     const [cursor, setCursor] = useState<Index>(149);
-    const [notice, setNotice] = useState('');
     const [confirmReset, setConfirmReset] = useState(false);
+    const [soundEnabled, setSoundEnabled] = useState(true);
     const game = new Game(G);
     const board = G.board;
     const side = playerSide(ctx.currentPlayer);
     const piece = selected === null ? null : board[selected];
     const destinations = selected === null ? [] : game.findLegalMoves(selected);
-    const checked = !G.winner && game.isCheck(side);
+    const forbiddenDestinations = selected === null ? [] : game.findForbiddenMoves(selected);
+    const isCheck = !G.winner && game.isCheck(side);
+    const unavailablePieces = isCheck
+        ? board.flatMap((occupant, index) =>
+              occupant?.side === side && game.findLegalMoves(index).length === 0 ? [index] : [],
+          )
+        : [];
+    const sounds = useGameSounds(G, isCheck, soundEnabled);
+    const { boardRef, captured, clearCapture } = useMoveAnimation(G);
     const sideName = (value: string) => (value === Side.Red ? '红方' : '黑方');
     const status = G.winner
         ? `${sideName(G.winner)}胜`
-        : `${sideName(side)}行棋${checked ? ' · 将军' : ''}`;
+        : `${sideName(side)}行棋${isCheck ? ' · 将军' : ''}`;
 
     function pick(index: Index) {
-        if (G.winner) return;
+        if (G.winner || unavailablePieces.includes(index)) return;
 
         setCursor(index);
-        setNotice('');
 
         if (index === selected) {
             setSelected(null);
         } else if (board[index]?.side === side) {
             setSelected(index);
+            sounds.pick();
         } else if (selected !== null && destinations.includes(index)) {
             moves.move(selected, index);
             setSelected(null);
+        } else if (selected !== null && forbiddenDestinations.includes(index)) {
+            sounds.illegal();
         } else if (selected !== null) {
-            setNotice('这里不能落子，请选择有圆点或圆环标记的位置。');
+            setSelected(null);
         }
     }
 
@@ -65,7 +78,6 @@ function GameBoard({ G, ctx, moves, reset }: BoardProps<GameState>) {
 
         if (event.key === 'Escape') {
             setSelected(null);
-            setNotice('');
         }
 
         if (!(event.key in offsets)) return;
@@ -86,7 +98,6 @@ function GameBoard({ G, ctx, moves, reset }: BoardProps<GameState>) {
 
         reset();
         setSelected(null);
-        setNotice('');
         setConfirmReset(false);
     }
 
@@ -102,6 +113,15 @@ function GameBoard({ G, ctx, moves, reset }: BoardProps<GameState>) {
                     </h1>
                 </div>
                 <div className="new-game">
+                    <button
+                        className="sound-toggle"
+                        role="switch"
+                        aria-label="音效"
+                        aria-checked={soundEnabled}
+                        onClick={() => setSoundEnabled(!soundEnabled)}
+                    >
+                        音效 {soundEnabled ? '开' : '关'}
+                    </button>
                     {confirmReset && <span>结束当前对局？</span>}
                     <button onClick={newGame}>
                         {confirmReset ? '确认新局' : '新局'}
@@ -119,6 +139,7 @@ function GameBoard({ G, ctx, moves, reset }: BoardProps<GameState>) {
                     <span>單 · 氏 · 都</span>
                 </div>
                 <div
+                    ref={boardRef}
                     className="board"
                     role="group"
                     aria-label="13乘13棋盘，方向键移动焦点，回车选子或落子，Escape取消选择"
@@ -127,19 +148,27 @@ function GameBoard({ G, ctx, moves, reset }: BoardProps<GameState>) {
                     {G.board.map((occupant, index) => {
                         const { x, y } = Board.coordinatesOf(index);
                         const possible = destinations.includes(index);
-                        const last = G.lastMove?.from === index || G.lastMove?.to === index;
-                        const kingChecked =
-                            occupant?.side === side && occupant.kind === Kind.King && checked;
+                        const forbidden = forbiddenDestinations.includes(index);
+                        const lastFrom = G.lastMove?.from === index;
+                        const lastTo = G.lastMove?.to === index;
+                        const isKingInCheck =
+                            occupant?.side === side && occupant.kind === Kind.King && isCheck;
+                        const isDefeatedKing =
+                            !!G.winner &&
+                            occupant?.kind === Kind.King &&
+                            occupant.side !== G.winner;
+                        const unavailable = unavailablePieces.includes(index);
                         const label = `${'ABCDEFGHIJKLM'[x]}${y + 1}${occupant ? ` ${sideName(occupant.side)}${Piece.nameOf(occupant.side, occupant.kind)}` : ' 空位'}`;
 
                         return (
                             <button
                                 key={index}
                                 id={`point-${index}`}
-                                className={`point${selected === index ? ' selected' : ''}${last ? ' last' : ''}${possible ? ' possible' : ''}${kingChecked ? ' checked' : ''}`}
+                                className={`point${selected === index ? ' selected' : ''}${possible ? ' possible' : ''}${isKingInCheck ? ' checked' : ''}${isDefeatedKing ? ' defeated' : ''}${unavailable ? ' unavailable' : ''}`}
                                 tabIndex={cursor === index ? 0 : -1}
-                                aria-label={`${label}${possible ? '，可落子' : ''}`}
+                                aria-label={`${label}${possible ? '，可落子' : ''}${forbidden ? '，禁着：会使己方王受攻击或两王照面' : ''}${lastFrom ? '，上一步起点' : ''}${lastTo ? '，上一步落点' : ''}`}
                                 aria-pressed={selected === index}
+                                aria-disabled={!!G.winner || unavailable}
                                 disabled={!!G.winner}
                                 onClick={() => pick(index)}
                                 onFocus={() => setCursor(index)}
@@ -147,8 +176,34 @@ function GameBoard({ G, ctx, moves, reset }: BoardProps<GameState>) {
                             >
                                 {occupant && (
                                     <span className={`piece ${occupant.side}`}>
-                                        <span>{Piece.nameOf(occupant.side, occupant.kind)}</span>
+                                        <PieceArt piece={occupant} />
                                     </span>
+                                )}
+                                {captured?.index === index && (
+                                    <span
+                                        className={`piece captured-piece ${captured.piece.side}`}
+                                        aria-hidden="true"
+                                        onAnimationEnd={clearCapture}
+                                    >
+                                        <PieceArt piece={captured.piece} />
+                                    </span>
+                                )}
+                                {lastFrom && <span className="last-from-mark" aria-hidden="true" />}
+                                {lastTo && (
+                                    <svg
+                                        className="last-to-mark"
+                                        viewBox="0 0 100 100"
+                                        aria-hidden="true"
+                                    >
+                                        <path
+                                            className="last-to-outline"
+                                            d="M5 20V5H20 M80 5H95V20 M95 80V95H80 M20 95H5V80"
+                                        />
+                                        <path d="M5 20V5H20 M80 5H95V20 M95 80V95H80 M20 95H5V80" />
+                                    </svg>
+                                )}
+                                {forbidden && (
+                                    <span className="move-mark forbidden-mark" aria-hidden="true" />
                                 )}
                                 {possible && (
                                     <span className={occupant ? 'capture-mark' : 'move-mark'} />
@@ -171,12 +226,11 @@ function GameBoard({ G, ctx, moves, reset }: BoardProps<GameState>) {
                     {status}
                 </div>
                 <p aria-live="polite">
-                    {notice ||
-                        (G.winner
-                            ? '对局结束，点击「新局」再来一盘。'
-                            : piece
-                              ? `${Piece.nameOf(piece.side, piece.kind)} · ${hints[piece.kind]}`
-                              : '点选己方棋子，再点选落点。红方先行。')}
+                    {G.winner
+                        ? '对局结束，点击「新局」再来一盘。'
+                        : piece
+                          ? `${Piece.nameOf(piece.side, piece.kind)} · ${hints[piece.kind]}${forbiddenDestinations.length ? ' 红点为禁着：会使己方王受攻击或两王照面。' : ''}`
+                          : '点选己方棋子，再点选落点。红方先行。'}
                 </p>
             </footer>
         </main>
