@@ -1,8 +1,9 @@
-import type { Index } from '@/core/board';
+import type { BoardData, Index } from '@/core/board';
 import type { Game as GameConfig } from 'boardgame.io';
 import { INVALID_MOVE } from 'boardgame.io/core';
 import { Game, type GameState } from '@/core/game';
 import { Side } from '@/core/piece';
+import { PositionEditor } from '@/core/editor';
 
 export const playerSide = (player: string): Side => (player === '0' ? Side.Red : Side.Black);
 
@@ -37,3 +38,14 @@ export const gameConfig: GameConfig<GameState> = {
         },
     },
 };
+
+export function gameFromPosition(board: BoardData): GameConfig<GameState> {
+    const editor = new PositionEditor(board);
+
+    if (!editor.canStart()) throw new Error('Invalid starting position');
+
+    return {
+        ...gameConfig,
+        setup: () => ({ board: editor.data.slice(), lastMove: null, winner: null }),
+    };
+}

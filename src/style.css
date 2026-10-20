@@ -207,9 +207,6 @@ i {
     transform: translateY(-2px);
     box-shadow: 0 4px 8px #332b2530;
 }
-.point.selected .piece-face {
-    fill: #fff9eb;
-}
 .point.selected::after {
     content: '';
     position: absolute;
@@ -230,7 +227,7 @@ i {
     box-shadow: 0 0 0 2px #fff9eb;
     pointer-events: none;
 }
-.last-to-mark {
+.position-mark {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -242,11 +239,11 @@ i {
     stroke-linejoin: round;
     pointer-events: none;
 }
-.last-to-outline {
+.position-mark-outline {
     stroke: #fff9eb;
     stroke-width: 8;
 }
-.point.selected .last-to-mark {
+.point.selected .position-mark {
     visibility: hidden;
 }
 .point.checked .piece {
@@ -350,12 +347,6 @@ i {
     font-size: 13px;
     font-weight: 600;
 }
-.game-footer p {
-    margin: 0;
-    color: #7c786e;
-    font-size: 12px;
-    line-height: 1.7;
-}
 
 @media (max-width: 600px) {
     .game {
@@ -384,4 +375,81 @@ i {
     .new-game > button {
         padding: 8px 10px;
     }
+}
+
+.editor-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.editor-toolbar button {
+    padding: 5px 10px;
+    border: 1px solid #d2cbbf;
+    border-radius: 4px;
+    background: #f8f5ef;
+    color: #4c4c42;
+}
+.editor-toolbar button:disabled {
+    opacity: 0.5;
+}
+.piece-picker {
+    position: absolute;
+    z-index: 5;
+    --picker-width: min(calc(100% - 16px), 480px);
+    width: var(--picker-width);
+    padding: 8px;
+    border: 1px solid #c6bdad;
+    border-radius: 6px;
+    background: #f8f5ef;
+    box-shadow: 0 6px 20px #332b2540;
+}
+.picker-pieces {
+    display: grid;
+    grid-template-columns: repeat(9, minmax(0, 1fr));
+    gap: 4px;
+}
+.picker-pieces + .picker-pieces {
+    margin-top: 6px;
+}
+.palette-piece {
+    position: relative;
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+}
+.palette-piece:disabled .piece {
+    filter: grayscale(1) opacity(0.45);
+}
+.palette-piece.empty .piece {
+    filter: grayscale(1) opacity(0.1);
+}
+.piece-count {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    min-width: 15px;
+    padding: 1px 3px;
+    border-radius: 8px;
+    background: #f8f5ef;
+    color: #34352e;
+    font-size: 11px;
+    line-height: 1;
+    pointer-events: none;
+}
+
+.game.editing .point.selected::after {
+    display: none;
+}
+.game.editing .point.selected .position-mark {
+    visibility: visible;
+}
+.game.editing .point.selected .piece {
+    transform: none;
+    box-shadow: 0 1px 2px #332b2520;
 }

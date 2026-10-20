@@ -21,9 +21,9 @@ vi.mock('react', () => ({
     },
 }));
 
-function render(state: GameState) {
+function render(state: GameState, enabled = true) {
     hooks.cursor = 0;
-    return useMoveAnimation(state);
+    return useMoveAnimation(state, enabled);
 }
 
 beforeEach(() => {
@@ -83,6 +83,18 @@ it('skips capture and move animations when reduced motion is requested', () => {
     hooks.effect();
     vi.stubGlobal('matchMedia', () => ({ matches: true }));
     render({ ...initial, lastMove: { from: 106, to: 54 } });
+    hooks.effect();
+    expect(hooks.setCaptured).toHaveBeenLastCalledWith(null);
+});
+
+it('keeps editing silent visually and does not replay an old move when editing is cancelled', () => {
+    const state = { ...Game.initialState(), lastMove: { from: 106, to: 67 } };
+    render(state);
+    hooks.effect();
+    render(state, false);
+    hooks.effect();
+    expect(hooks.setCaptured).toHaveBeenLastCalledWith(null);
+    render(state, true);
     hooks.effect();
     expect(hooks.setCaptured).toHaveBeenLastCalledWith(null);
 });

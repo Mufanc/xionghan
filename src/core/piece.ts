@@ -55,6 +55,10 @@ export namespace Piece {
         },
     };
 
+    export function initialCount(kind: Kind): number {
+        return kind === Kind.King ? 1 : kind === Kind.Pawn ? 5 : 2;
+    }
+
     export function nameOf(side: Side, kind: Kind): string {
         return names[side][kind];
     }

@@ -1,6 +1,6 @@
 import { Client } from 'boardgame.io/client';
 import { describe, expect, it, vi } from 'vitest';
-import { gameConfig } from '@/adapters/boardgame';
+import { gameConfig, gameFromPosition } from '@/adapters/boardgame';
 import { Game } from '@/core/game';
 import { Board } from '@/core/board';
 import { Side, Kind } from '@/core/piece';
@@ -8,6 +8,27 @@ import { Side, Kind } from '@/core/piece';
 const p = Board.indexOf;
 
 describe('boardgame.io integration', () => {
+    it('starts an edited position as a fresh red turn and keeps the draft isolated', () => {
+        const board = new Board().data;
+        board[p(2, 8)] = null;
+        const game = gameFromPosition(board);
+        board[p(4, 8)] = null;
+        const client = Client({ game });
+        const state = client.getState()!;
+        expect(state.ctx.currentPlayer).toBe('0');
+        expect(state.G.lastMove).toBeNull();
+        expect(state.G.winner).toBeNull();
+        expect(state.G.board[p(2, 8)]).toBeNull();
+        expect(state.G.board[p(4, 8)]?.kind).toBe(Kind.Pawn);
+        client.moves.move(p(4, 8), p(4, 5));
+        expect(client.getState()!.ctx.currentPlayer).toBe('1');
+        client.reset();
+        expect(client.getState()!.G.board[p(4, 8)]?.kind).toBe(Kind.Pawn);
+        const missingKing = new Board().data;
+        missingKing[p(6, 11)] = null;
+        expect(() => gameFromPosition(missingKing)).toThrow('Invalid starting position');
+    });
+
     it('operates directly on plain state that can be restored without class instances', () => {
         const state = Game.initialState();
         const game = new Game(state);

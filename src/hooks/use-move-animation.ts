@@ -3,7 +3,7 @@ import type { GameState } from '@/core/game';
 import type { Piece } from '@/core/piece';
 import type { Index } from '@/core/board';
 
-export function useMoveAnimation(state: GameState) {
+export function useMoveAnimation(state: GameState, enabled = true) {
     const boardRef = useRef<HTMLDivElement>(null);
     const previousState = useRef(state);
     const [captured, setCaptured] = useState<{ index: Index; piece: Piece } | null>(null);
@@ -15,6 +15,7 @@ export function useMoveAnimation(state: GameState) {
         previousState.current = state;
 
         if (
+            !enabled ||
             !lastMove ||
             lastMove === previous.lastMove ||
             matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -49,7 +50,7 @@ export function useMoveAnimation(state: GameState) {
             animation.cancel();
             to.style.removeProperty('z-index');
         };
-    }, [state]);
+    }, [state, enabled]);
 
     return { boardRef, captured, clearCapture: () => setCaptured(null) };
 }
