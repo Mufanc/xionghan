@@ -5,12 +5,13 @@ import { PieceArt } from '@/components/PieceArt';
 import { PiecePicker } from '@/components/PiecePicker';
 import { PositionMark } from '@/components/PositionMark';
 import { PositionEditor } from '@/core/editor';
-import { gameConfig, gameFromPosition, playerSide } from '@/adapters/boardgame';
+import { gameConfig, gameFromPosition, gameFromSession, playerSide } from '@/adapters/boardgame';
 import { Board, type BoardData, type Index } from '@/core/board';
 import { Side, Kind, Piece } from '@/core/piece';
 import { Game, type GameState } from '@/core/game';
 import { useGameSounds } from '@/hooks/use-game-sounds';
 import { useMoveAnimation } from '@/hooks/use-move-animation';
+import { loadSession, saveSession } from '@/storage/session';
 
 const hints: Record<Kind, string> = {
     [Kind.King]: '宫内直走一格；两王不可照面。',
@@ -26,6 +27,7 @@ const hints: Record<Kind, string> = {
 };
 
 interface GameBoardProps extends BoardProps<GameState> {
+    initialDraft: BoardData | null;
     onApplyPosition: (board: BoardData) => void;
     soundEnabled: boolean;
     onSoundEnabledChange: (enabled: boolean) => void;
@@ -36,13 +38,14 @@ function GameBoard({
     ctx,
     moves,
     onApplyPosition,
+    initialDraft,
     soundEnabled,
     onSoundEnabledChange,
 }: GameBoardProps) {
     const [selected, setSelected] = useState<Index | null>(null);
     const [cursor, setCursor] = useState<Index>(149);
     const [confirmReset, setConfirmReset] = useState(false);
-    const [draft, setDraft] = useState<BoardData | null>(null);
+    const [draft, setDraft] = useState<BoardData | null>(initialDraft);
     const [picker, setPicker] = useState<Index | null>(null);
     const editor = draft ? new PositionEditor(draft) : null;
     const game = new Game(G);
@@ -66,6 +69,16 @@ function GameBoard({
         : G.winner
           ? `${sideName(G.winner)}胜`
           : `${sideName(side)}行棋${isCheck ? ' · 将军' : ''}`;
+
+    useEffect(() => {
+        saveSession({
+            version: 1,
+            game: G,
+            currentPlayer: ctx.currentPlayer === '0' ? '0' : '1',
+            draft,
+            soundEnabled,
+        });
+    }, [G, ctx.currentPlayer, draft, soundEnabled]);
 
     useEffect(() => {
         if (picker === null) return;
@@ -376,21 +389,27 @@ function GameBoard({
 }
 
 export default function App() {
+    const [saved] = useState(loadSession);
     const [position, setPosition] = useState<BoardData | null>(null);
-    const [soundEnabled, setSoundEnabled] = useState(true);
+    const [soundEnabled, setSoundEnabled] = useState(saved?.soundEnabled ?? true);
     const GameClient = useMemo(
         () =>
             Client<GameState, GameBoardProps>({
-                game: position ? gameFromPosition(position) : gameConfig,
+                game: position
+                    ? gameFromPosition(position)
+                    : saved
+                      ? gameFromSession(saved.game, saved.currentPlayer)
+                      : gameConfig,
                 board: GameBoard,
                 numPlayers: 2,
                 debug: import.meta.env.DEV,
             }),
-        [position],
+        [position, saved],
     );
 
     return (
         <GameClient
+            initialDraft={position ? null : (saved?.draft ?? null)}
             onApplyPosition={setPosition}
             soundEnabled={soundEnabled}
             onSoundEnabledChange={setSoundEnabled}

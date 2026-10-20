@@ -1,6 +1,6 @@
 import { Client } from 'boardgame.io/client';
 import { describe, expect, it, vi } from 'vitest';
-import { gameConfig, gameFromPosition } from '@/adapters/boardgame';
+import { gameConfig, gameFromPosition, gameFromSession } from '@/adapters/boardgame';
 import { Game } from '@/core/game';
 import { Board } from '@/core/board';
 import { Side, Kind } from '@/core/piece';
@@ -8,6 +8,19 @@ import { Side, Kind } from '@/core/piece';
 const p = Board.indexOf;
 
 describe('boardgame.io integration', () => {
+    it('restores the last move and black turn, then continues alternating', () => {
+        const client = Client({ game: gameConfig });
+        client.moves.move(p(2, 8), p(2, 5));
+        const saved = client.getState()!;
+        const restored = Client({ game: gameFromSession(saved.G, '1') });
+        expect(restored.getState()!.G).toEqual(saved.G);
+        expect(restored.getState()!.ctx.currentPlayer).toBe('1');
+        restored.moves.move(p(4, 4), p(4, 7));
+        expect(restored.getState()!.ctx.currentPlayer).toBe('0');
+        expect(restored.getState()!.G.board[p(4, 7)]?.side).toBe(Side.Black);
+        expect(saved.G.board[p(4, 4)]?.side).toBe(Side.Black);
+    });
+
     it('starts an edited position as a fresh red turn and keeps the draft isolated', () => {
         const board = new Board().data;
         board[p(2, 8)] = null;
@@ -108,6 +121,9 @@ describe('boardgame.io integration', () => {
         const state = client.getState()!;
         expect(state.G.winner).toBe(Side.Red);
         expect(state.ctx.gameover).toEqual({ winner: Side.Red });
+        const restored = Client({ game: gameFromSession(state.G, '0') });
+        expect(restored.getState()!.G).toEqual(state.G);
+        expect(restored.getState()!.ctx.gameover).toEqual({ winner: Side.Red });
         const error = vi.spyOn(console, 'error').mockImplementation(() => {});
         client.moves.move(p(5, 1), p(5, 2));
         expect(client.getState()!.G).toEqual(state.G);

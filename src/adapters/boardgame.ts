@@ -49,3 +49,17 @@ export function gameFromPosition(board: BoardData): GameConfig<GameState> {
         setup: () => ({ board: editor.data.slice(), lastMove: null, winner: null }),
     };
 }
+
+export function gameFromSession(game: GameState, currentPlayer: '0' | '1'): GameConfig<GameState> {
+    return {
+        ...gameConfig,
+        setup: () => structuredClone(game),
+        turn: {
+            ...gameConfig.turn,
+            order: {
+                first: () => Number(currentPlayer),
+                next: ({ ctx }) => (ctx.playOrderPos + 1) % 2,
+            },
+        },
+    };
+}
