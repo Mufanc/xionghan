@@ -55,6 +55,7 @@ function GameBoard({
     const [draft, setDraft] = useState<BoardData | null>(initialDraft);
     const [picker, setPicker] = useState<Index | null>(null);
     const [reviewStep, setReviewStep] = useState<number | null>(null);
+    const [fullscreen, setFullscreen] = useState(!!document.fullscreenElement);
     const totalSteps = G.record?.moves.length ?? 0;
     const reviewing = reviewStep !== null && reviewStep < totalSteps;
     const displayed = useMemo(
@@ -93,6 +94,39 @@ function GameBoard({
           : G.winner
             ? `${sideName(G.winner)}胜`
             : `${sideName(side)}行棋${isCheck ? ' · 将军' : ''}`;
+
+    useEffect(() => {
+        const update = () => setFullscreen(!!document.fullscreenElement);
+        document.addEventListener('fullscreenchange', update);
+
+        return () => document.removeEventListener('fullscreenchange', update);
+    }, []);
+
+    async function toggleFullscreen() {
+        try {
+            if (document.fullscreenElement) {
+                await document.exitFullscreen();
+            } else {
+                const portrait = matchMedia('(orientation: portrait)').matches;
+                await document.documentElement.requestFullscreen();
+
+                if (
+                    portrait &&
+                    screen.orientation &&
+                    'lock' in screen.orientation &&
+                    typeof screen.orientation.lock === 'function'
+                ) {
+                    try {
+                        await screen.orientation.lock('portrait');
+                    } catch (error) {
+                        console.warn('浏览器不支持锁定竖屏', error);
+                    }
+                }
+            }
+        } catch (error) {
+            console.warn('无法切换全屏', error);
+        }
+    }
 
     useEffect(() => {
         saveSession({
@@ -300,6 +334,17 @@ function GameBoard({
                         <span className="toggle-dot" aria-hidden="true" />
                         棋谱
                     </button>
+                    {document.fullscreenEnabled && (
+                        <button
+                            className="ui-button quiet"
+                            aria-pressed={fullscreen}
+                            title={fullscreen ? '退出全屏（Esc）' : '进入全屏'}
+                            onClick={toggleFullscreen}
+                        >
+                            <span className="toggle-dot" aria-hidden="true" />
+                            全屏
+                        </button>
+                    )}
                 </div>
             </header>
             <nav className="game-toolbar" aria-label={editor ? '摆子操作' : '对局操作'}>
