@@ -4,6 +4,7 @@ import { INVALID_MOVE } from 'boardgame.io/core';
 import { Game, type GameState } from '@/core/game';
 import { Side } from '@/core/piece';
 import { PositionEditor } from '@/core/editor';
+import { GameRecord } from '@/core/record';
 
 export const playerSide = (player: string): Side => (player === '0' ? Side.Red : Side.Black);
 
@@ -16,10 +17,16 @@ export const gameConfig: GameConfig<GameState> = {
     moves: {
         move({ G, ctx }, from: Index, to: Index) {
             const game = new Game(G);
+            const record = G.record ?? GameRecord.create(G).data;
+            const side = playerSide(ctx.currentPlayer);
+            const board = G.board.slice();
 
             if (!game.tryMove(from, to, playerSide(ctx.currentPlayer))) {
                 return INVALID_MOVE;
             }
+
+            record.moves.push({ from, to, side, name: GameRecord.describe(board, from, to) });
+            G.record = record;
         },
     },
     endIf: ({ G }) => (G.winner ? { winner: G.winner } : undefined),

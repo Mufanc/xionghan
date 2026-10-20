@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import { flushSync } from 'react-dom';
 import { Client, type BoardProps } from 'boardgame.io/react';
 import { BoardArt } from '@/components/BoardArt';
 import { PieceArt } from '@/components/PieceArt';
 import { PiecePicker } from '@/components/PiecePicker';
 import { PositionMark } from '@/components/PositionMark';
+import { RecordPanel } from '@/components/RecordPanel';
+import { GameRecord } from '@/core/record';
 import { PositionEditor } from '@/core/editor';
 import { gameConfig, gameFromPosition, gameFromSession, playerSide } from '@/adapters/boardgame';
 import { Board, type BoardData, type Index } from '@/core/board';
@@ -28,6 +31,8 @@ const hints: Record<Kind, string> = {
 
 interface GameBoardProps extends BoardProps<GameState> {
     initialDraft: BoardData | null;
+    recordVisible: boolean;
+    onRecordVisibleChange: (visible: boolean) => void;
     onApplyPosition: (board: BoardData) => void;
     soundEnabled: boolean;
     onSoundEnabledChange: (enabled: boolean) => void;
@@ -39,6 +44,8 @@ function GameBoard({
     moves,
     onApplyPosition,
     initialDraft,
+    recordVisible,
+    onRecordVisibleChange,
     soundEnabled,
     onSoundEnabledChange,
 }: GameBoardProps) {
@@ -47,28 +54,45 @@ function GameBoard({
     const [confirmReset, setConfirmReset] = useState(false);
     const [draft, setDraft] = useState<BoardData | null>(initialDraft);
     const [picker, setPicker] = useState<Index | null>(null);
+    const [reviewStep, setReviewStep] = useState<number | null>(null);
+    const totalSteps = G.record?.moves.length ?? 0;
+    const reviewing = reviewStep !== null && reviewStep < totalSteps;
+    const displayed = useMemo(
+        () => (reviewing && G.record ? new GameRecord(G.record).stateAt(reviewStep!) : G),
+        [G, reviewing, reviewStep],
+    );
     const editor = draft ? new PositionEditor(draft) : null;
-    const game = new Game(G);
-    const board = draft ?? G.board;
+    const game = new Game(displayed);
+    const board = draft ?? displayed.board;
     const piece = selected === null ? null : board[selected];
-    const side = playerSide(ctx.currentPlayer);
-    const destinations = editor || selected === null ? [] : game.findLegalMoves(selected);
+    const side =
+        reviewing && G.record
+            ? (G.record.moves[reviewStep!]?.side ?? playerSide(ctx.currentPlayer))
+            : playerSide(ctx.currentPlayer);
+    const destinations =
+        editor || reviewing || selected === null ? [] : game.findLegalMoves(selected);
     const forbiddenDestinations =
-        editor || selected === null ? [] : game.findForbiddenMoves(selected);
-    const isCheck = !editor && !G.winner && game.isCheck(side);
+        editor || reviewing || selected === null ? [] : game.findForbiddenMoves(selected);
+    const isCheck = !editor && !displayed.winner && game.isCheck(side);
     const unavailablePieces = isCheck
         ? board.flatMap((occupant, index) =>
               occupant?.side === side && game.findLegalMoves(index).length === 0 ? [index] : [],
           )
         : [];
-    const sounds = useGameSounds(G, isCheck, soundEnabled && !editor);
-    const { boardRef, captured, clearCapture } = useMoveAnimation(G, !editor);
+    const sounds = useGameSounds(
+        G,
+        !G.winner && new Game(G).isCheck(playerSide(ctx.currentPlayer)),
+        soundEnabled && !editor && !reviewing,
+    );
+    const { boardRef, captured, clearCapture } = useMoveAnimation(G, !editor && !reviewing);
     const sideName = (value: string) => (value === Side.Red ? '红方' : '黑方');
     const status = editor
         ? '摆子中'
-        : G.winner
-          ? `${sideName(G.winner)}胜`
-          : `${sideName(side)}行棋${isCheck ? ' · 将军' : ''}`;
+        : reviewing
+          ? `第 ${reviewStep} 步`
+          : G.winner
+            ? `${sideName(G.winner)}胜`
+            : `${sideName(side)}行棋${isCheck ? ' · 将军' : ''}`;
 
     useEffect(() => {
         saveSession({
@@ -77,8 +101,9 @@ function GameBoard({
             currentPlayer: ctx.currentPlayer === '0' ? '0' : '1',
             draft,
             soundEnabled,
+            recordVisible,
         });
-    }, [G, ctx.currentPlayer, draft, soundEnabled]);
+    }, [G, ctx.currentPlayer, draft, soundEnabled, recordVisible]);
 
     useEffect(() => {
         if (picker === null) return;
@@ -133,7 +158,20 @@ function GameBoard({
         setPicker(null);
     }
 
+    function transitionLayout(update: () => void) {
+        if (
+            document.startViewTransition &&
+            !matchMedia('(prefers-reduced-motion: reduce)').matches
+        ) {
+            document.startViewTransition(() => flushSync(update));
+        } else {
+            update();
+        }
+    }
+
     function beginEdit() {
+        if (reviewing) return;
+
         setDraft(G.board.slice());
         setSelected(null);
         setPicker(null);
@@ -166,7 +204,7 @@ function GameBoard({
             return;
         }
 
-        if (G.winner || unavailablePieces.includes(index)) return;
+        if (reviewing || G.winner || unavailablePieces.includes(index)) return;
 
         setCursor(index);
 
@@ -222,7 +260,9 @@ function GameBoard({
     }
 
     return (
-        <main className={`game${editor ? ' editing' : ''}`}>
+        <main
+            className={`game${editor ? ' editing' : ''}${!recordVisible ? ' record-hidden' : ''}`}
+        >
             <header className="topbar">
                 <div className="identity">
                     <span className="seal" aria-hidden="true">
@@ -232,61 +272,94 @@ function GameBoard({
                         匈汉象棋<small>十三路 · 同屏对弈</small>
                     </h1>
                 </div>
-                <div className="new-game">
+                <div className="view-controls">
                     <button
-                        className="sound-toggle"
+                        className="ui-button quiet"
                         role="switch"
                         aria-label="音效"
                         aria-checked={soundEnabled}
                         onClick={() => onSoundEnabledChange(!soundEnabled)}
                     >
-                        音效 {soundEnabled ? '开' : '关'}
+                        <span className="toggle-dot" aria-hidden="true" />
+                        音效
                     </button>
+                    <button
+                        className="ui-button quiet"
+                        aria-pressed={recordVisible}
+                        disabled={!!editor}
+                        onClick={() => {
+                            const toggle = () => {
+                                onRecordVisibleChange(!recordVisible);
+                                setReviewStep(null);
+                                setSelected(null);
+                            };
+
+                            transitionLayout(toggle);
+                        }}
+                    >
+                        <span className="toggle-dot" aria-hidden="true" />
+                        棋谱
+                    </button>
+                </div>
+            </header>
+            <nav className="game-toolbar" aria-label={editor ? '摆子操作' : '对局操作'}>
+                <button
+                    className="ui-button"
+                    disabled={!editor && reviewing}
+                    onClick={() => transitionLayout(editor ? cancelEdit : beginEdit)}
+                >
+                    {editor ? '取消摆子' : '摆子'}
+                </button>
+                <div className="game-actions">
                     {editor ? (
                         <>
-                            <button onClick={saveEdit}>开始对弈</button>
-                            <button onClick={cancelEdit}>取消摆子</button>
+                            <button
+                                className="ui-button quiet"
+                                onClick={() => {
+                                    editor.clear();
+                                    setDraft(editor.data);
+                                    setSelected(null);
+                                    setPicker(null);
+                                }}
+                            >
+                                清空棋盘
+                            </button>
+                            <button
+                                className="ui-button quiet"
+                                onClick={() => {
+                                    editor.reset();
+                                    setDraft(editor.data);
+                                    setSelected(null);
+                                    setPicker(null);
+                                }}
+                            >
+                                默认布局
+                            </button>
+                            <button className="ui-button primary" onClick={saveEdit}>
+                                开始对弈
+                            </button>
                         </>
                     ) : (
                         <>
-                            <button onClick={beginEdit}>摆子</button>
-                            {confirmReset && <span>结束当前对局？</span>}
-                            <button onClick={newGame}>
-                                {confirmReset ? '确认新局' : '新局'}
-                                <span aria-hidden="true"> ↻</span>
-                            </button>
                             {confirmReset && (
-                                <button onClick={() => setConfirmReset(false)}>取消</button>
+                                <button
+                                    className="ui-button quiet"
+                                    onClick={() => setConfirmReset(false)}
+                                >
+                                    取消
+                                </button>
                             )}
+                            <button
+                                className={`ui-button${confirmReset ? ' primary' : ''}`}
+                                onClick={newGame}
+                            >
+                                {confirmReset ? '确认新局' : '新局'}
+                            </button>
                         </>
                     )}
                 </div>
-            </header>
+            </nav>
             <section className="play-area" aria-label="匈汉象棋对局">
-                {editor && (
-                    <div className="editor-toolbar">
-                        <button
-                            onClick={() => {
-                                editor.clear();
-                                setDraft(editor.data);
-                                setSelected(null);
-                                setPicker(null);
-                            }}
-                        >
-                            清空棋盘
-                        </button>
-                        <button
-                            onClick={() => {
-                                editor.reset();
-                                setDraft(editor.data);
-                                setSelected(null);
-                                setPicker(null);
-                            }}
-                        >
-                            默认布局
-                        </button>
-                    </div>
-                )}
                 <div className="player-bar">
                     <span className={`player ${Side.Black}`}>
                         <i />
@@ -305,15 +378,15 @@ function GameBoard({
                         const { x, y } = Board.coordinatesOf(index);
                         const possible = destinations.includes(index);
                         const forbidden = forbiddenDestinations.includes(index);
-                        const lastFrom = !editor && G.lastMove?.from === index;
-                        const lastTo = !editor && G.lastMove?.to === index;
+                        const lastFrom = !editor && displayed.lastMove?.from === index;
+                        const lastTo = !editor && displayed.lastMove?.to === index;
                         const isKingInCheck =
                             occupant?.side === side && occupant.kind === Kind.King && isCheck;
                         const isDefeatedKing =
                             !editor &&
-                            !!G.winner &&
+                            !!displayed.winner &&
                             occupant?.kind === Kind.King &&
-                            occupant.side !== G.winner;
+                            occupant.side !== displayed.winner;
                         const unavailable = unavailablePieces.includes(index);
                         const active = selected === index || (!!editor && picker === index);
                         const label = `${'ABCDEFGHIJKLM'[x]}${y + 1}${occupant ? ` ${sideName(occupant.side)}${Piece.nameOf(occupant.side, occupant.kind)}` : ' 空位'}`;
@@ -326,8 +399,8 @@ function GameBoard({
                                 tabIndex={cursor === index ? 0 : -1}
                                 aria-label={`${label}${possible ? '，可落子' : ''}${forbidden ? '，禁着：会使己方王受攻击或两王照面' : ''}${lastFrom ? '，上一步起点' : ''}${lastTo ? '，上一步落点' : ''}`}
                                 aria-pressed={active}
-                                aria-disabled={(!editor && !!G.winner) || unavailable}
-                                disabled={!editor && !!G.winner}
+                                aria-disabled={reviewing || (!editor && !!G.winner) || unavailable}
+                                disabled={reviewing || (!editor && !!G.winner)}
                                 onClick={() => pick(index)}
                                 onFocus={() => setCursor(index)}
                                 onKeyDown={(event) => navigate(event, index)}
@@ -337,7 +410,7 @@ function GameBoard({
                                         <PieceArt piece={occupant} />
                                     </span>
                                 )}
-                                {!editor && captured?.index === index && (
+                                {!editor && !reviewing && captured?.index === index && (
                                     <span
                                         className={`piece captured-piece ${captured.piece.side}`}
                                         aria-hidden="true"
@@ -374,7 +447,7 @@ function GameBoard({
                     <i />
                     {status}
                 </div>
-                {!editor && (
+                {!editor && !reviewing && (
                     <p aria-live="polite">
                         {G.winner
                             ? '对局结束，点击「新局」再来一盘。'
@@ -384,6 +457,17 @@ function GameBoard({
                     </p>
                 )}
             </footer>
+            {!editor && recordVisible && (
+                <RecordPanel
+                    record={G.record}
+                    step={reviewing ? reviewStep! : totalSteps}
+                    onSelect={(step) => {
+                        setReviewStep(step === totalSteps ? null : step);
+                        setSelected(null);
+                        setPicker(null);
+                    }}
+                />
+            )}
         </main>
     );
 }
@@ -392,6 +476,7 @@ export default function App() {
     const [saved] = useState(loadSession);
     const [position, setPosition] = useState<BoardData | null>(null);
     const [soundEnabled, setSoundEnabled] = useState(saved?.soundEnabled ?? true);
+    const [recordVisible, setRecordVisible] = useState(saved?.recordVisible ?? true);
     const GameClient = useMemo(
         () =>
             Client<GameState, GameBoardProps>({
@@ -410,6 +495,8 @@ export default function App() {
     return (
         <GameClient
             initialDraft={position ? null : (saved?.draft ?? null)}
+            recordVisible={recordVisible}
+            onRecordVisibleChange={setRecordVisible}
             onApplyPosition={setPosition}
             soundEnabled={soundEnabled}
             onSoundEnabledChange={setSoundEnabled}

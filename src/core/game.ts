@@ -1,8 +1,10 @@
 import { Board, type BoardData, type Index } from '@/core/board';
 import { Kind, Side } from '@/core/piece';
 import { Rules } from '@/core/rules';
+import type { RecordData } from '@/core/record';
 
 export interface GameState {
+    record?: RecordData;
     board: BoardData;
     lastMove: { from: Index; to: Index } | null;
     winner: Side | null;

@@ -1,5 +1,6 @@
 import { Board, type BoardData } from '@/core/board';
-import type { GameState } from '@/core/game';
+import { Game, type GameState } from '@/core/game';
+import { GameRecord } from '@/core/record';
 import { Kind, Piece, Side } from '@/core/piece';
 
 export interface SavedSession {
@@ -8,6 +9,7 @@ export interface SavedSession {
     currentPlayer: '0' | '1';
     draft: BoardData | null;
     soundEnabled: boolean;
+    recordVisible?: boolean;
 }
 
 const key = 'xionghan.session';
@@ -52,6 +54,7 @@ export function loadSession(): SavedSession | null {
             saved.version !== 1 ||
             !['0', '1'].includes(saved.currentPlayer) ||
             typeof saved.soundEnabled !== 'boolean' ||
+            (saved.recordVisible !== undefined && typeof saved.recordVisible !== 'boolean') ||
             !saved.game ||
             (saved.game.winner !== null && !isSide(saved.game.winner)) ||
             !isBoard(saved.game.board, saved.game.winner) ||
@@ -71,6 +74,53 @@ export function loadSession(): SavedSession | null {
                 !saved.game.board[move.to])
         )
             return null;
+
+        const record = saved.game.record;
+
+        if (record !== undefined) {
+            if (
+                !record ||
+                !record.initial ||
+                record.initial.winner !== null ||
+                !isBoard(record.initial.board) ||
+                !Array.isArray(record.moves)
+            )
+                return null;
+
+            const replay: GameState = {
+                board: structuredClone(record.initial.board),
+                lastMove: record.initial.lastMove,
+                winner: null,
+            };
+            let previousSide: Side | null = null;
+
+            for (const move of record.moves) {
+                if (
+                    !move ||
+                    !isSide(move.side) ||
+                    !isIndex(move.from) ||
+                    !isIndex(move.to) ||
+                    move.side === previousSide ||
+                    replay.board[move.from]?.side !== move.side ||
+                    move.name !== GameRecord.describe(replay.board, move.from, move.to) ||
+                    !new Game(replay).tryMove(move.from, move.to, move.side)
+                )
+                    return null;
+
+                previousSide = move.side;
+            }
+
+            if (
+                JSON.stringify(replay.board) !== JSON.stringify(saved.game.board) ||
+                JSON.stringify(replay.lastMove) !== JSON.stringify(saved.game.lastMove) ||
+                replay.winner !== saved.game.winner ||
+                (!replay.winner &&
+                    previousSide &&
+                    (saved.currentPlayer === '0' ? Side.Red : Side.Black) !==
+                        Side.opposite(previousSide))
+            )
+                return null;
+        }
 
         return saved;
     } catch {

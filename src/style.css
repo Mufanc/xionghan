@@ -35,18 +35,22 @@ button {
     -webkit-tap-highlight-color: transparent;
 }
 button:focus-visible {
-    outline: 3px solid #315db1;
+    outline: 2px solid #917756;
     outline-offset: 2px;
 }
 button:disabled {
     cursor: default;
 }
 .game {
-    width: min(100%, 1000px);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 26%);
+    column-gap: 24px;
+    width: min(100%, 1400px);
     margin: auto;
     padding: 20px 28px 16px;
 }
 .topbar {
+    grid-column: 1 / -1;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -89,30 +93,72 @@ h1 small {
     letter-spacing: 2px;
     color: #818077;
 }
-.new-game {
+.view-controls,
+.game-actions {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
 }
-.new-game > button {
-    background: #f8f5ef;
-    border: 1px solid #d2cbbf;
-    padding: 9px 15px;
+.ui-button,
+.record-panel button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 36px;
+    padding: 7px 14px;
+    border: 1px solid #c9bdab;
     border-radius: 5px;
-    color: #4c4c42;
+    background: #f5efe3;
+    color: #584a39;
+    font-size: 12px;
+    transition:
+        background-color 140ms,
+        border-color 140ms,
+        color 140ms;
 }
-.new-game > button:hover {
-    border-color: #8e8a7d;
-    background: #fffdf7;
+.ui-button:hover:not(:disabled),
+.record-panel button:hover:not(:disabled) {
+    background: #e8decd;
+    border-color: #aa9579;
 }
-.new-game > .sound-toggle[aria-checked='true'] {
-    color: #315db1;
-    border-color: #a8bce0;
-    background: #eef3fb;
+.ui-button.quiet {
+    background: transparent;
+    border-color: transparent;
+}
+.ui-button.primary {
+    background: #a1332d;
+    border-color: #a1332d;
+    color: #fff8ec;
+}
+.ui-button.primary:hover:not(:disabled) {
+    background: #882b26;
+    border-color: #882b26;
+}
+.ui-button:disabled {
+    opacity: 0.4;
+}
+.toggle-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #c1b7a7;
+}
+.ui-button[aria-checked='true'] .toggle-dot,
+.ui-button[aria-pressed='true'] .toggle-dot {
+    background: #a1332d;
+}
+.game-toolbar {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 48px;
+    margin-bottom: 6px;
+    border-block: 1px solid #d7d1c6;
 }
 .play-area {
-    width: min(100%, calc(100dvh - 225px));
+    width: min(100%, calc(100dvh - 280px));
     min-width: 260px;
     margin: auto;
 }
@@ -122,6 +168,7 @@ h1 small {
     justify-content: space-between;
     padding: 8px 3px;
     font-size: 11px;
+    line-height: 14px;
     letter-spacing: 2px;
     color: #918b7f;
 }
@@ -383,32 +430,16 @@ i {
         flex-direction: column;
         gap: 8px;
     }
-    .new-game > span {
-        position: absolute;
-        top: 72px;
-        right: 16px;
+    .ui-button {
+        padding-inline: 8px;
+        font-size: 12px;
     }
-    .new-game > button {
-        padding: 8px 10px;
+    .game-actions,
+    .view-controls {
+        gap: 2px;
     }
 }
 
-.editor-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 8px;
-}
-.editor-toolbar button {
-    padding: 5px 10px;
-    border: 1px solid #d2cbbf;
-    border-radius: 4px;
-    background: #f8f5ef;
-    color: #4c4c42;
-}
-.editor-toolbar button:disabled {
-    opacity: 0.5;
-}
 .piece-picker {
     position: absolute;
     z-index: 5;
@@ -468,4 +499,192 @@ i {
 .game.editing .point.selected .piece {
     transform: none;
     box-shadow: 0 1px 2px #332b2520;
+}
+
+.record-panel {
+    grid-column: 2;
+    grid-row: 3;
+    min-width: 0;
+    align-self: stretch;
+    min-height: 0;
+    contain: size;
+    display: flex;
+    flex-direction: column;
+    margin: 30px 0;
+    border: 1px solid #d7d1c6;
+    border-radius: 6px;
+    background: #f6f2e9;
+    overflow: hidden;
+    font-size: 13px;
+}
+.record-panel h2 {
+    margin: 0;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    border-bottom: 1px solid #d7d1c6;
+}
+.record-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto 1fr 1fr;
+    align-items: center;
+    gap: 6px;
+    padding: 8px;
+    border-top: 1px solid #d7d1c6;
+}
+.record-panel button {
+    border: 0;
+    border-radius: 3px;
+    padding: 8px;
+    background: transparent;
+    color: inherit;
+    white-space: nowrap;
+}
+.record-controls button {
+    font-size: 20px;
+    line-height: 1;
+}
+.record-panel button:disabled {
+    opacity: 0.35;
+}
+.record-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.record-round {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    padding: 3px 6px;
+}
+.record-round:nth-child(even) {
+    background: #ede8de;
+}
+.record-list button[aria-current='step'] {
+    background: #e2d7c5;
+}
+.record-list small {
+    color: #7c786e;
+    text-align: center;
+}
+.record-list .RED {
+    color: #b91c1c;
+}
+.record-list .BLACK {
+    color: #166534;
+}
+.game.editing,
+.game.record-hidden {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 1000px;
+}
+@media (max-width: 850px) {
+    .game {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .game:not(.editing) .play-area {
+        grid-row: 4;
+    }
+    .game:not(.editing) .game-footer {
+        grid-row: 6;
+    }
+    .record-panel {
+        display: contents;
+        contain: none;
+    }
+    .record-panel h2 {
+        display: none;
+    }
+    .record-list {
+        grid-row: 3;
+        display: flex;
+        min-height: 38px;
+        max-height: none;
+        overflow-x: auto;
+        margin-bottom: 10px;
+        border-block: 1px solid #d7d1c6;
+    }
+    .record-round {
+        flex: 0 0 auto;
+        grid-template-columns: 28px auto auto;
+        gap: 6px;
+    }
+    .record-controls {
+        grid-row: 5;
+    }
+}
+
+.play-area {
+    view-transition-name: game-board;
+}
+.identity {
+    view-transition-name: game-header;
+}
+.view-controls {
+    view-transition-name: game-actions;
+}
+.game-toolbar > .ui-button {
+    view-transition-name: game-edit;
+}
+.game-toolbar {
+    view-transition-name: game-toolbar;
+}
+.game-actions {
+    view-transition-name: game-toolbar-actions;
+}
+.game-footer {
+    view-transition-name: game-status;
+}
+.record-panel {
+    view-transition-name: game-record;
+}
+::view-transition-group(*) {
+    animation-duration: 240ms;
+    animation-timing-function: ease-in-out;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+    animation: none;
+}
+::view-transition-new(game-toolbar) {
+    animation: none;
+    mix-blend-mode: normal;
+    height: 100%;
+    object-fit: fill;
+}
+::view-transition-old(game-toolbar) {
+    display: none;
+}
+::view-transition-new(game-header),
+::view-transition-new(game-actions),
+::view-transition-new(game-edit),
+::view-transition-new(game-toolbar-actions) {
+    animation: none;
+    mix-blend-mode: normal;
+    width: max-content;
+    height: auto;
+}
+::view-transition-old(game-header),
+::view-transition-old(game-actions),
+::view-transition-old(game-edit),
+::view-transition-old(game-toolbar-actions) {
+    display: none;
+}
+@media (max-width: 850px) {
+    .record-panel {
+        view-transition-name: none;
+    }
+    .record-list {
+        view-transition-name: game-record;
+    }
+    .record-controls {
+        view-transition-name: game-record-controls;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*) {
+        animation-duration: 0s;
+    }
 }

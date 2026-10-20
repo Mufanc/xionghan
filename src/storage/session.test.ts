@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Game } from '@/core/game';
+import { Client } from 'boardgame.io/client';
+import { gameConfig } from '@/adapters/boardgame';
 import { Board } from '@/core/board';
 import { Side } from '@/core/piece';
 import { loadSession, saveSession, type SavedSession } from '@/storage/session';
@@ -32,6 +34,7 @@ describe('session storage', () => {
         saved.draft = saved.game.board.slice();
         saved.draft[Board.indexOf(4, 8)] = null;
         saved.soundEnabled = false;
+        saved.recordVisible = false;
         saveSession(saved);
         expect(loadSession()).toEqual(saved);
         expect(loadSession()!.game.board[Board.indexOf(4, 8)]).not.toBeNull();
@@ -56,6 +59,22 @@ describe('session storage', () => {
             value = JSON.stringify(invalid);
             expect(loadSession()).toBeNull();
         }
+    });
+
+    it('restores validated records and rejects tampered moves or mismatched final positions', () => {
+        const client = Client({ game: gameConfig });
+        client.moves.move(Board.indexOf(2, 8), Board.indexOf(2, 5));
+        const saved = { ...session(), game: client.getState()!.G, currentPlayer: '1' as const };
+        saveSession(saved);
+        expect(loadSession()).toEqual(saved);
+        const changed = structuredClone(saved);
+        changed.game.record!.moves[0].to = Board.indexOf(3, 8);
+        saveSession(changed);
+        expect(loadSession()).toBeNull();
+        const mismatched = structuredClone(saved);
+        mismatched.game.board[Board.indexOf(4, 8)] = null;
+        saveSession(mismatched);
+        expect(loadSession()).toBeNull();
     });
 
     it('keeps playing when browser storage is unavailable', () => {
