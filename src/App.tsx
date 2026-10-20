@@ -12,6 +12,19 @@ import { Game, type GameState } from '@/core/game';
 import { useGameSounds } from '@/hooks/use-game-sounds';
 import { useMoveAnimation } from '@/hooks/use-move-animation';
 
+const hints: Record<Kind, string> = {
+    [Kind.King]: '宫内直走一格；两王不可照面。',
+    [Kind.Advisor]: '宫内斜走一格。',
+    [Kind.Elephant]: '斜走两格，不可塞象眼，不越长城。',
+    [Kind.Horse]: '走日字或直走三格；马腿被挡时不可走。',
+    [Kind.Chariot]: '沿横线、竖线行走，不可越子。',
+    [Kind.Cannon]: '直线行走；吃子时必须隔一个棋子。',
+    [Kind.Pawn]: '过河前可直进至对岸第一线，吃子只前进一步；过河后可前进或横走一格。',
+    [Kind.Train]: '沿斜轨行走，不能越过星点；只有从星点出发才能吃子。',
+    [Kind.Guard]: '横走偶数格，不可越子；只能吃相隔两格的棋子。',
+    [Kind.Catapult]: '沿直线或斜线行走；只能吃周围一格内、未被邻子保护的棋子。',
+};
+
 interface GameBoardProps extends BoardProps<GameState> {
     onApplyPosition: (board: BoardData) => void;
     soundEnabled: boolean;
@@ -34,6 +47,7 @@ function GameBoard({
     const editor = draft ? new PositionEditor(draft) : null;
     const game = new Game(G);
     const board = draft ?? G.board;
+    const piece = selected === null ? null : board[selected];
     const side = playerSide(ctx.currentPlayer);
     const destinations = editor || selected === null ? [] : game.findLegalMoves(selected);
     const forbiddenDestinations =
@@ -347,6 +361,15 @@ function GameBoard({
                     <i />
                     {status}
                 </div>
+                {!editor && (
+                    <p aria-live="polite">
+                        {G.winner
+                            ? '对局结束，点击「新局」再来一盘。'
+                            : piece
+                              ? `${Piece.nameOf(piece.side, piece.kind)} · ${hints[piece.kind]}${forbiddenDestinations.length ? ' 红点为禁着：会使己方王受攻击或两王照面。' : ''}`
+                              : '点选己方棋子，再点选落点。红方先行。'}
+                    </p>
+                )}
             </footer>
         </main>
     );
