@@ -1,0 +1,15 @@
+{
+    "name": "@xionghan/server",
+    "private": true,
+    "version": "0.1.0",
+    "type": "commonjs",
+    "scripts": {
+        "dev": "node --watch index.cjs",
+        "start": "node index.cjs",
+        "build": "node --check index.cjs"
+    },
+    "dependencies": {
+        "@xionghan/core": "workspace:*",
+        "boardgame.io": "0.50.2"
+    }
+}

@@ -2,6 +2,28 @@
 
 [查看规则](wiki/rules.md)：棋盘与初始摆法、十种棋子的走法和吃法、胜负与和棋规则，附图示说明。
 
+## 开发
+
+使用 Node.js 24 和 pnpm，根目录统一管理三个工作区：
+
+- `core/`：棋盘、规则、棋谱、摆子校验与 bgio 游戏定义，供两端共用。
+- `web/`：React 页面、皮肤、音效和浏览器存档。
+- `server/`：最小 bgio 服务端入口。
+
+```sh
+pnpm install
+pnpm dev          # 直接加载 core 源码，启动网页 http://127.0.0.1:5173
+pnpm test         # core 和 web 的常规测试
+pnpm test:random  # 随机对局测试
+pnpm build        # 按依赖顺序构建三个工作区
+pnpm preview      # 预览 web/dist 的生产页面
+pnpm dev:server   # 编译并监听 core，启动并监听服务端，默认端口 8000
+```
+
+服务端通过 `PORT` 和 `WEB_ORIGINS`（逗号分隔）配置监听端口及允许的网页来源；默认允许 `http://127.0.0.1:5173`。
+生产环境先执行 `pnpm build`，再执行 `pnpm --filter @xionghan/server start`。
+目前网页仍使用本地对局；服务端尚未接入大厅界面和持久化，重启会丢失服务端内存中的对局。
+
 ## 已实现
 
 - **皮肤**：导入含 `skin.properties` 的 ZIP 皮肤包，按 ID 更新，支持切换、删除与刷新恢复；可单独替换棋盘、棋子、背景和棋盒，棋盒与棋谱支持单段点九图，缺少的资源继续使用默认绘制。

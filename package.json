@@ -3,31 +3,20 @@
     "private": true,
     "version": "0.1.0",
     "type": "module",
+    "packageManager": "pnpm@12.14.0",
     "scripts": {
-        "dev": "vite --host 127.0.0.1",
-        "build": "tsc -b && vite build",
-        "preview": "vite preview --host 127.0.0.1",
-        "test": "vitest run --exclude \"**/random-play.test.ts\"",
+        "dev": "pnpm --filter @xionghan/web dev",
+        "dev:server": "pnpm --filter @xionghan/core build && pnpm --parallel --filter @xionghan/core --filter @xionghan/server dev",
+        "build": "pnpm -r build",
+        "preview": "pnpm --filter @xionghan/web preview",
+        "test": "pnpm --filter @xionghan/core build && pnpm -r test",
+        "test:random": "pnpm --filter @xionghan/core test:random",
         "format": "prettier --write .",
-        "format:check": "prettier --check .",
-        "test:random": "vitest run src/adapters/random-play.test.ts --reporter=verbose --silent=false"
-    },
-    "dependencies": {
-        "@zip.js/zip.js": "^2.24.0",
-        "boardgame.io": "0.50.2",
-        "marked": "^18.1.1",
-        "react": "^19.3.1",
-        "react-dom": "^19.3.1"
+        "format:check": "prettier --check ."
     },
     "devDependencies": {
-        "@types/react": "^19.3.0",
-        "@types/react-dom": "^19.3.0",
-        "@vitejs/plugin-react": "^6.1.2",
         "prettier": "^3.9.10",
         "typescript": "~7.0.2",
-        "vite": "^8.3.4",
-        "vite-plugin-pwa": "^2.0.0",
         "vitest": "^5.0.5"
-    },
-    "packageManager": "pnpm@12.14.0"
+    }
 }

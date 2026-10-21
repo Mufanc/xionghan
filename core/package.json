@@ -1,0 +1,26 @@
+{
+    "name": "@xionghan/core",
+    "private": true,
+    "version": "0.1.0",
+    "type": "commonjs",
+    "exports": {
+        "./*": {
+            "types": "./*.ts",
+            "browser": "./*.ts",
+            "default": "./dist/*.js"
+        }
+    },
+    "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "dev": "tsc -p tsconfig.json --watch",
+        "test": "vitest run --exclude \"**/random-play.test.ts\"",
+        "test:random": "vitest run random-play.test.ts --reporter=verbose --silent=false"
+    },
+    "dependencies": {
+        "boardgame.io": "0.50.2"
+    },
+    "devDependencies": {
+        "typescript": "~7.0.2",
+        "vitest": "^5.0.5"
+    }
+}

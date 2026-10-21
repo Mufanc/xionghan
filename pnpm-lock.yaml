@@ -165,7 +165,44 @@ settings:
 importers:
 
   .:
+    devDependencies:
+      prettier:
+        specifier: ^3.9.10
+        version: 3.9.10
+      typescript:
+        specifier: ~7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(terser@5.51.2))
+
+  core:
     dependencies:
+      boardgame.io:
+        specifier: 0.50.2
+        version: 0.50.2
+    devDependencies:
+      typescript:
+        specifier: ~7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(terser@5.51.2))
+
+  server:
+    dependencies:
+      '@xionghan/core':
+        specifier: workspace:*
+        version: link:../core
+      boardgame.io:
+        specifier: 0.50.2
+        version: 0.50.2
+
+  web:
+    dependencies:
+      '@xionghan/core':
+        specifier: workspace:*
+        version: link:../core
       '@zip.js/zip.js':
         specifier: ^2.24.0
         version: 2.24.0
@@ -191,9 +228,6 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^6.1.2
         version: 6.1.2(vite@8.3.4(@types/node@26.6.5)(terser@5.51.2))
-      prettier:
-        specifier: ^3.9.10
-        version: 3.9.10
       typescript:
         specifier: ~7.0.2
         version: 7.0.2
