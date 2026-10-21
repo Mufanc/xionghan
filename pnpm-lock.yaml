@@ -166,6 +166,9 @@ importers:
 
   .:
     dependencies:
+      '@zip.js/zip.js':
+        specifier: ^2.24.0
+        version: 2.24.0
       boardgame.io:
         specifier: 0.50.2
         version: 0.50.2
@@ -1296,6 +1299,10 @@ packages:
 
   '@vitest/spy@5.0.5':
     resolution: {integrity: sha512-lwJRExuH417257Q5wv9QYugN9IMJkoxcrKrYxGPQkBzl7wlNpTUxD/5yNX4ESKVUIShKPgkGchYPFMWOOk0wzw==}
+
+  '@zip.js/zip.js@2.24.0':
+    resolution: {integrity: sha512-WlaVKzdqBK+RF3bdiXZWbdCnvGB6PdO4IHC1mn/2Yfl3bASgqUNegnU3+PNg61iecwoPfUi5BgLUPqBukXpyWw==}
+    engines: {bun: '>=0.7.0', deno: '>=1.0.0', node: '>=18.0.0'}
 
   accepts@1.3.8:
     resolution: {integrity: sha512-PYAthTa2m2VKxuvSD3DPC/Gy+U+sOA1LAuT8mkmRuvw+NACSaeXEQ+NHcVF7rONl6qcaxV3Uuemwawk+7+SJLw==}
@@ -3872,6 +3879,8 @@ snapshots:
       vite: 8.3.4(@types/node@26.6.5)(terser@5.51.2)
 
   '@vitest/spy@5.0.5': {}
+
+  '@zip.js/zip.js@2.24.0': {}
 
   accepts@1.3.8:
     dependencies:

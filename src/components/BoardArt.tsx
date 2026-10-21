@@ -1,3 +1,4 @@
+import { useSkins } from '@/skins/SkinProvider';
 import { Board } from '@/core/board';
 
 const lines = Array.from({ length: Board.SIZE }, (_, index) => index * 100 + 50);
@@ -18,6 +19,10 @@ const stars = [
 ];
 
 export function BoardArt() {
+    const url = useSkins()?.skin?.url('board.png');
+
+    if (url) return <img className="board-art" src={url} alt="" draggable={false} />;
+
     return (
         <svg className="board-art" viewBox="0 0 1300 1300" aria-hidden="true">
             <rect width="1300" height="1300" fill="bisque" />

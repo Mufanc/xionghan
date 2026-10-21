@@ -1,6 +1,11 @@
+import { useSkins } from '@/skins/SkinProvider';
 import { Piece } from '@/core/piece';
 
 export function PieceArt({ piece }: { piece: Piece }) {
+    const url = useSkins()?.skin?.pieceUrl(piece);
+
+    if (url) return <img className="skin-piece" src={url} alt="" draggable={false} />;
+
     return (
         <svg viewBox="0 0 100 100" aria-hidden="true">
             <circle className="piece-face" cx="50" cy="50" r="47" strokeWidth="3.5" />

@@ -11,6 +11,7 @@ import { Board, type BoardData, type Index } from '@/core/board';
 import { Side, Kind, Piece } from '@/core/piece';
 import { Game, type GameState } from '@/core/game';
 import { useGameSounds } from '@/hooks/use-game-sounds';
+import { SkinProvider, useSkins } from '@/skins/SkinProvider';
 import { loadSession, saveSession } from '@/storage/session';
 
 const hints: Record<Kind, string> = {
@@ -50,6 +51,7 @@ function GameBoard({
     volume,
     onVolumeChange,
 }: GameBoardProps) {
+    const skins = useSkins();
     const [selected, setSelected] = useState<Index | null>(null);
     const [confirmReset, setConfirmReset] = useState(false);
     const resetDialog = useRef<HTMLDialogElement>(null);
@@ -403,6 +405,14 @@ function GameBoard({
                         />
                         <output>{Math.round(volume * 100)}%</output>
                     </label>
+                    <button
+                        onClick={() => {
+                            menu.current?.hidePopover();
+                            skins?.openDialog();
+                        }}
+                    >
+                        皮肤
+                    </button>
                     {document.fullscreenEnabled && (
                         <button
                             onClick={() => {
@@ -533,15 +543,17 @@ export default function App() {
     );
 
     return (
-        <GameClient
-            initialDraft={position ? null : (saved?.draft ?? null)}
-            recordVisible={recordVisible}
-            onRecordVisibleChange={setRecordVisible}
-            onApplyPosition={setPosition}
-            volume={volume}
-            onVolumeChange={setVolume}
-            soundEnabled={soundEnabled}
-            onSoundEnabledChange={setSoundEnabled}
-        />
+        <SkinProvider>
+            <GameClient
+                initialDraft={position ? null : (saved?.draft ?? null)}
+                recordVisible={recordVisible}
+                onRecordVisibleChange={setRecordVisible}
+                onApplyPosition={setPosition}
+                volume={volume}
+                onVolumeChange={setVolume}
+                soundEnabled={soundEnabled}
+                onSoundEnabledChange={setSoundEnabled}
+            />
+        </SkinProvider>
     );
 }

@@ -13,6 +13,7 @@
         "test:random": "vitest run src/adapters/random-play.test.ts --reporter=verbose --silent=false"
     },
     "dependencies": {
+        "@zip.js/zip.js": "^2.24.0",
         "boardgame.io": "0.50.2",
         "marked": "^18.1.1",
         "react": "^19.3.1",

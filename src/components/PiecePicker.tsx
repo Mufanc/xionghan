@@ -1,3 +1,4 @@
+import { useSkins } from '@/skins/SkinProvider';
 import { PieceArt } from '@/components/PieceArt';
 import { PositionEditor } from '@/core/editor';
 import { Board, type Index } from '@/core/board';
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function PiecePicker({ editor, index, onSelect }: Props) {
+    const skin = useSkins()?.skin;
     const { x, y } = Board.coordinatesOf(index);
 
     return (
@@ -18,6 +20,7 @@ export function PiecePicker({ editor, index, onSelect }: Props) {
             role="dialog"
             aria-label="棋盒"
             style={{
+                ...skin?.frameStyle('panel'),
                 left: `clamp(8px, ${((x + 0.5) * 100) / 13}%, calc(100% - var(--picker-width) - 8px))`,
                 [y < 6 ? 'top' : 'bottom']: `${((y < 6 ? y + 1 : 13 - y) * 100) / 13}%`,
             }}
