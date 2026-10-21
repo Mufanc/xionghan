@@ -280,6 +280,27 @@ namespace.use((socket, next) => {
     next();
 });
 
+// Koa 处理抛出的错误时会清空响应头，保留浏览器识别身份恢复失败所需的 CORS。
+server.app.use(async (ctx, next) => {
+    try {
+        await next();
+    } catch (error) {
+        const origin = ctx.get('origin');
+
+        if (ctx.path.startsWith('/games/XiongHan') && origins.includes(origin)) {
+            error.headers = {
+                ...error.headers,
+                'Access-Control-Allow-Origin': origin,
+                'Access-Control-Allow-Credentials': 'true',
+                Vary: 'Origin',
+                'Cache-Control': 'no-store',
+            };
+        }
+
+        throw error;
+    }
+});
+
 const requests = new Map();
 
 // 单实例内串行处理同一房间的入座、离开和改名，避免并发抢到同一个座位。

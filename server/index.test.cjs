@@ -377,10 +377,18 @@ test(
             const alice = await issue();
             const bob = await issue();
             assert.notEqual(alice, bob);
-            const api = (id, action, cookie) =>
-                fetch(`${server.base}/games/XiongHan/${id}/${action}`, {
-                    headers: { Cookie: cookie },
+            const api = async (id, action, cookie) => {
+                const response = await fetch(`${server.base}/games/XiongHan/${id}/${action}`, {
+                    headers: { Cookie: cookie, Origin: 'http://127.0.0.1:5173' },
                 });
+                assert.equal(
+                    response.headers.get('access-control-allow-origin'),
+                    'http://127.0.0.1:5173',
+                );
+                assert.equal(response.headers.get('access-control-allow-credentials'), 'true');
+                assert.equal(response.headers.get('cache-control'), 'no-store');
+                return response;
+            };
             const join = (id, cookie) =>
                 fetch(`${server.base}/games/XiongHan/${id}/join`, {
                     method: 'POST',
