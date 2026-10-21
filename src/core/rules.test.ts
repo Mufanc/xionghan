@@ -210,6 +210,33 @@ describe('piece rules', () => {
     });
 });
 
+describe('single-destination validation', () => {
+    it('matches enumerated legal moves, preserves the board, and rejects invalid targets', () => {
+        const positions = [
+            new Board().data,
+            fixture(...kings, [Side.Black, Kind.Chariot, 5, 11]),
+            fixture(
+                [Side.Black, Kind.King, 6, 1],
+                [Side.Red, Kind.King, 6, 11],
+                [Side.Black, Kind.Pawn, 6, 7],
+            ),
+        ];
+        for (const position of positions) {
+            const before = structuredClone(position);
+            const rules = new Rules(new Board(position));
+            for (let from = 0; from < position.length; from++) {
+                const legal = new Set(rules.findLegalMoves(from));
+                for (let to = 0; to < position.length; to++) {
+                    expect(rules.isLegalMove(from, to), `${from} -> ${to}`).toBe(legal.has(to));
+                }
+            }
+            for (const to of [-1, 169, 1.5, NaN])
+                expect(rules.isLegalMove(p(2, 8), to)).toBe(false);
+            expect(position).toEqual(before);
+        }
+    });
+});
+
 describe('king safety and endings', () => {
     it('rejects exposing facing kings', () => {
         const board = fixture(...kings);

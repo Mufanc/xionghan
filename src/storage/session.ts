@@ -83,6 +83,7 @@ export function loadSession(): SavedSession | null {
         )
             return null;
 
+        const winner = new Game(saved.game).getWinner();
         const record = saved.game.record;
 
         if (record !== undefined) {
@@ -99,6 +100,7 @@ export function loadSession(): SavedSession | null {
                 board: structuredClone(record.initial.board),
                 lastMove: record.initial.lastMove,
             };
+            const game = new Game(replay);
             let previousSide: Side | null = null;
 
             for (const move of record.moves) {
@@ -108,28 +110,26 @@ export function loadSession(): SavedSession | null {
                     !isIndex(move.from) ||
                     !isIndex(move.to) ||
                     move.side === previousSide ||
-                    new Game(replay).getWinner() !== null ||
                     replay.board[move.from]?.side !== move.side ||
                     move.name !== GameRecord.describe(replay.board, move.from, move.to) ||
-                    !new Game(replay).tryMove(move.from, move.to, move.side)
+                    !game.tryMove(move.from, move.to, move.side)
                 )
                     return null;
 
+                // 能走出合法的下一步，就已证明上一局面并非将死或困毙。
                 previousSide = move.side;
             }
 
             if (
                 JSON.stringify(replay.board) !== JSON.stringify(saved.game.board) ||
                 JSON.stringify(replay.lastMove) !== JSON.stringify(saved.game.lastMove) ||
-                (!new Game(replay).getWinner() &&
+                (!winner &&
                     previousSide &&
                     (saved.currentPlayer === '0' ? Side.Red : Side.Black) !==
                         Side.opposite(previousSide))
             )
                 return null;
         }
-
-        const winner = new Game(saved.game).getWinner();
 
         if (saved.game.winner !== undefined && saved.game.winner !== winner) return null;
 

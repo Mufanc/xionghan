@@ -23,8 +23,8 @@ export class Rules {
         return count;
     }
 
-    // 只检查走法、阻挡和吃子条件，己方王的安全由 findLegalMoves 过滤，避免与 isCheck 循环调用。
-    private candidateMoves(from: Index): Index[] {
+    // 只检查走法、阻挡和吃子条件，王的安全由合法走法校验处理，避免与 isCheck 循环调用。
+    private candidateMoves(from: Index, targetIndex?: Index): Index[] {
         const piece = this.board.at(from);
 
         if (!piece) return [];
@@ -34,8 +34,10 @@ export class Rules {
         // 将双方纵坐标统一成从己方底线向前计数，宫界、长城和过城条件共用同一套判断。
         const homeY = (y: number) => (piece.side === Side.Red ? 12 - y : y);
         const moves: Index[] = [];
+        const start = targetIndex ?? 0;
+        const end = targetIndex === undefined ? Board.SIZE * Board.SIZE : targetIndex + 1;
 
-        for (let to = 0; to < Board.SIZE * Board.SIZE; to++) {
+        for (let to = start; to < end; to++) {
             const target = this.board.at(to);
 
             if (to === from || target?.side === piece.side) continue;
@@ -180,7 +182,28 @@ export class Rules {
 
         return this.board.data.some(
             (piece, from) =>
-                piece?.side === Side.opposite(side) && this.candidateMoves(from).includes(king),
+                piece?.side === Side.opposite(side) && this.candidateMoves(from, king).length > 0,
+        );
+    }
+
+    private keepsKingSafe(from: Index, to: Index, side: Side): boolean {
+        const next = new Board(this.board.data.slice());
+
+        next.move(from, to);
+
+        return !new Rules(next).isCheck(side);
+    }
+
+    isLegalMove(from: Index, to: Index): boolean {
+        const piece = this.board.at(from);
+
+        return (
+            !!piece &&
+            Number.isInteger(to) &&
+            to >= 0 &&
+            to < Board.SIZE ** 2 &&
+            this.candidateMoves(from, to).length > 0 &&
+            this.keepsKingSafe(from, to, piece.side)
         );
     }
 
@@ -189,13 +212,7 @@ export class Rules {
 
         if (!piece) return [];
 
-        return this.candidateMoves(from).filter((to) => {
-            const next = new Board(this.board.data.slice());
-
-            next.move(from, to);
-
-            return !new Rules(next).isCheck(piece.side);
-        });
+        return this.candidateMoves(from).filter((to) => this.keepsKingSafe(from, to, piece.side));
     }
 
     findForbiddenMoves(from: Index): Index[] {
@@ -206,7 +223,9 @@ export class Rules {
 
     hasLegalMove(side: Side): boolean {
         return this.board.data.some(
-            (piece, from) => piece?.side === side && this.findLegalMoves(from).length > 0,
+            (piece, from) =>
+                piece?.side === side &&
+                this.candidateMoves(from).some((to) => this.keepsKingSafe(from, to, side)),
         );
     }
 }

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Game } from '@/core/game';
 import { Client } from 'boardgame.io/client';
 import { gameConfig, gameFromSession } from '@/adapters/boardgame';
+import { GameRecord } from '@/core/record';
 import { Board } from '@/core/board';
 import { Kind, Side } from '@/core/piece';
 import { loadSession, saveSession, type SavedSession } from '@/storage/session';
@@ -75,6 +76,38 @@ describe('session storage', () => {
         const mismatched = structuredClone(saved);
         mismatched.game.board[Board.indexOf(4, 8)] = null;
         saveSession(mismatched);
+        expect(loadSession()).toBeNull();
+    });
+
+    it('restores a 1200-ply record without losing its position or history', () => {
+        const initial = Game.initialState();
+        const replay = structuredClone(initial);
+        const record = GameRecord.create(initial).data;
+        const board = new Board(replay.board);
+        const p = Board.indexOf;
+        const cycle = [
+            [p(2, 12), p(2, 11)],
+            [p(2, 0), p(2, 1)],
+            [p(2, 11), p(2, 12)],
+            [p(2, 1), p(2, 0)],
+        ];
+        for (let step = 0; step < 1200; step++) {
+            const [from, to] = cycle[step % cycle.length];
+            record.moves.push({
+                from,
+                to,
+                side: board.at(from)!.side,
+                name: GameRecord.describe(board.data, from, to),
+            });
+            board.move(from, to);
+            replay.lastMove = { from, to };
+        }
+        const saved = { ...session(), game: { ...replay, record } };
+        saveSession(saved);
+        expect(loadSession()).toEqual(saved);
+        const tampered = structuredClone(saved);
+        tampered.game.record.moves[600].name = '非法走法';
+        saveSession(tampered);
         expect(loadSession()).toBeNull();
     });
 

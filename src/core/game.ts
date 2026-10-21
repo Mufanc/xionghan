@@ -31,7 +31,7 @@ export class Game {
             to < 0 ||
             to >= Board.SIZE * Board.SIZE ||
             this.board.at(from)?.side !== side ||
-            !this.rules.findLegalMoves(from).includes(to)
+            !this.rules.isLegalMove(from, to)
         ) {
             return false;
         }
