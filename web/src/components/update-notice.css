@@ -1,0 +1,31 @@
+.update-notice {
+    position: fixed;
+    z-index: 10;
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(16px, env(safe-area-inset-bottom));
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    max-width: calc(100% - 32px);
+    padding: 12px 14px;
+    border: 1px solid #c9bdab;
+    border-radius: 8px;
+    background: #f6f2e9;
+    color: #584a39;
+    box-shadow: 0 8px 28px #55452a26;
+    font-size: 13px;
+}
+.update-notice > div {
+    display: flex;
+    flex-shrink: 0;
+    gap: 4px;
+}
+@media (max-width: 600px) {
+    .update-notice {
+        left: 12px;
+        right: 12px;
+        max-width: none;
+        justify-content: space-between;
+        gap: 12px;
+    }
+}

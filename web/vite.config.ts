@@ -7,7 +7,8 @@ export default defineConfig({
     plugins: [
         react(),
         VitePWA({
-            injectRegister: 'script-defer',
+            injectRegister: false,
+            registerType: 'prompt',
             manifest: {
                 name: '匈汉象棋',
                 short_name: '匈汉象棋',
@@ -32,7 +33,7 @@ export default defineConfig({
             },
             workbox: {
                 globPatterns: ['**/*.{html,js,css,png,svg,ttf,ogg}'],
-                // 等旧页面全部关闭后更新，避免中断尚未保存的对局。
+                // 仅在用户点击更新后激活新版，避免自动刷新正在进行的对局。
                 skipWaiting: false,
                 clientsClaim: false,
             },

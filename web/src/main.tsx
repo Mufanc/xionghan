@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import '@/style.css';
+import { UpdateNotice } from '@/components/UpdateNotice';
 
 const showingRules = new URLSearchParams(location.search).get('page') === 'rules';
 
@@ -17,5 +18,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <React.Suspense fallback={null}>
             <Page />
         </React.Suspense>
+        <UpdateNotice />
     </React.StrictMode>,
 );

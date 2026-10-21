@@ -188,15 +188,21 @@ function GameBoard({
     useEffect(() => {
         if (online) return;
 
-        saveSession({
-            version: 1,
-            game: G,
-            currentPlayer: ctx.currentPlayer === '0' ? '0' : '1',
-            draft,
-            soundEnabled,
-            volume,
-            recordVisible,
-        });
+        const persist = () =>
+            saveSession({
+                version: 1,
+                game: G,
+                currentPlayer: ctx.currentPlayer === '0' ? '0' : '1',
+                draft,
+                soundEnabled,
+                volume,
+                recordVisible,
+            });
+
+        persist();
+        window.addEventListener('pagehide', persist);
+
+        return () => window.removeEventListener('pagehide', persist);
     }, [G, ctx.currentPlayer, draft, soundEnabled, volume, recordVisible, online]);
 
     useEffect(() => {
