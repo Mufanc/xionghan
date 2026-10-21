@@ -8,6 +8,7 @@ const instances: FakeAudio[] = [];
 
 class FakeAudio {
     currentTime = 0;
+    volume = 1;
     play = vi.fn().mockResolvedValue(undefined);
     pause = vi.fn();
 
@@ -99,6 +100,47 @@ describe('presentation-layer game sounds', () => {
         sounds.setEnabled(true);
         sounds.update(next, false);
         expect(instances).toHaveLength(1);
+    });
+
+    it('sounds only consecutive forward steps and tracks silent history navigation', () => {
+        const initial = Game.initialState();
+        const first = moved(initial, Board.indexOf(2, 8), Board.indexOf(2, 5));
+        const second = moved(first, Board.indexOf(2, 4), Board.indexOf(2, 5));
+        const sounds = new GameSounds(initial, 0);
+        sounds.setEnabled(true);
+        sounds.update(second, false, null, 2);
+        expect(instances).toHaveLength(0);
+        sounds.update(first, false, null, 1);
+        expect(instances).toHaveLength(0);
+        sounds.update(second, false, null, 2);
+        expect(instances.at(-1)!.src).toMatch(/capture-opponent\.ogg$/);
+        sounds.update(second, false, null, 2);
+        expect(instances).toHaveLength(1);
+        sounds.update(initial, false, null, 0);
+        sounds.update(first, true, null, 1);
+        expect(instances.at(-1)!.src).toMatch(/check-self\.ogg$/);
+        sounds.setEnabled(false);
+        sounds.update(second, false, Side.Black, 2);
+        sounds.setEnabled(true);
+        sounds.update(second, false, Side.Black, 2);
+        expect(instances).toHaveLength(2);
+    });
+
+    it('applies volume to current and future sounds without replaying', () => {
+        const sounds = new GameSounds(Game.initialState());
+        sounds.setEnabled(true);
+        sounds.setVolume(0.35);
+        sounds.pick();
+        expect(instances[0].volume).toBe(0.35);
+        sounds.setVolume(0);
+        expect(instances[0].volume).toBe(0);
+        expect(instances).toHaveLength(1);
+        sounds.setEnabled(false);
+        sounds.setEnabled(true);
+        sounds.pick();
+        expect(instances[1].volume).toBe(0);
+        sounds.setVolume(2);
+        expect(instances[1].volume).toBe(1);
     });
 
     it('stops on reset or disposal without playing a new move', () => {

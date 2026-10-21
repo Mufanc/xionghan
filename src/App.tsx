@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
 import { Client, type BoardProps } from 'boardgame.io/react';
 import { BoardView } from '@/components/BoardView';
@@ -32,6 +32,8 @@ interface GameBoardProps extends BoardProps<GameState> {
     onRecordVisibleChange: (visible: boolean) => void;
     onApplyPosition: (board: BoardData) => void;
     soundEnabled: boolean;
+    volume: number;
+    onVolumeChange: (volume: number) => void;
     onSoundEnabledChange: (enabled: boolean) => void;
 }
 
@@ -45,9 +47,13 @@ function GameBoard({
     onRecordVisibleChange,
     soundEnabled,
     onSoundEnabledChange,
+    volume,
+    onVolumeChange,
 }: GameBoardProps) {
     const [selected, setSelected] = useState<Index | null>(null);
     const [confirmReset, setConfirmReset] = useState(false);
+    const resetDialog = useRef<HTMLDialogElement>(null);
+    const menu = useRef<HTMLDivElement>(null);
     const [draft, setDraft] = useState<BoardData | null>(initialDraft);
     const [picker, setPicker] = useState<Index | null>(null);
     const [reviewStep, setReviewStep] = useState<number | null>(null);
@@ -78,10 +84,12 @@ function GameBoard({
           )
         : [];
     const sounds = useGameSounds(
-        G,
-        !winner && new Game(G).isCheck(playerSide(ctx.currentPlayer)),
-        soundEnabled && !editor && !reviewing,
-        winner,
+        displayed,
+        isCheck,
+        soundEnabled && !editor,
+        reviewing ? null : winner,
+        reviewing ? reviewStep! : totalSteps,
+        volume,
     );
     const sideName = (value: string) => (value === Side.Red ? '红方' : '黑方');
     const status = editor
@@ -98,6 +106,11 @@ function GameBoard({
 
         return () => document.removeEventListener('fullscreenchange', update);
     }, []);
+
+    useEffect(() => {
+        if (confirmReset) resetDialog.current?.showModal();
+        else resetDialog.current?.close();
+    }, [confirmReset]);
 
     async function toggleFullscreen() {
         try {
@@ -132,9 +145,10 @@ function GameBoard({
             currentPlayer: ctx.currentPlayer === '0' ? '0' : '1',
             draft,
             soundEnabled,
+            volume,
             recordVisible,
         });
-    }, [G, ctx.currentPlayer, draft, soundEnabled, recordVisible]);
+    }, [G, ctx.currentPlayer, draft, soundEnabled, volume, recordVisible]);
 
     useEffect(() => {
         if (picker === null) return;
@@ -275,113 +289,162 @@ function GameBoard({
                         匈汉象棋<small>十三路 · 同屏对弈</small>
                     </h1>
                 </div>
-                <div className="view-controls">
-                    <a
-                        className="ui-button quiet rules-link"
-                        href="?page=rules"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label="规则（新标签页）"
-                    >
-                        规则
-                    </a>
-                    <button
-                        className="ui-button quiet"
-                        role="switch"
-                        aria-label="音效"
-                        aria-checked={soundEnabled}
-                        onClick={() => onSoundEnabledChange(!soundEnabled)}
-                    >
-                        <span className="toggle-dot" aria-hidden="true" />
-                        音效
-                    </button>
-                    <button
-                        className="ui-button quiet"
-                        aria-pressed={recordVisible}
-                        disabled={!!editor}
-                        onClick={() => {
-                            const toggle = () => {
-                                onRecordVisibleChange(!recordVisible);
-                                setReviewStep(null);
-                                setSelected(null);
-                            };
-
-                            transitionLayout(toggle);
-                        }}
-                    >
-                        <span className="toggle-dot" aria-hidden="true" />
-                        棋谱
-                    </button>
-                    {document.fullscreenEnabled && (
-                        <button
-                            className="ui-button quiet"
-                            aria-pressed={fullscreen}
-                            title={fullscreen ? '退出全屏（Esc）' : '进入全屏'}
-                            onClick={toggleFullscreen}
-                        >
-                            <span className="toggle-dot" aria-hidden="true" />
-                            全屏
-                        </button>
-                    )}
-                </div>
-            </header>
-            <nav className="game-toolbar" aria-label={editor ? '摆子操作' : '对局操作'}>
-                <button
-                    className="ui-button"
-                    disabled={!editor && reviewing}
-                    onClick={() => transitionLayout(editor ? cancelEdit : beginEdit)}
-                >
-                    {editor ? '取消摆子' : '摆子'}
-                </button>
-                <div className="game-actions">
+                <nav className="view-controls" aria-label={editor ? '摆子操作' : '对局操作'}>
                     {editor ? (
                         <>
                             <button
                                 className="ui-button quiet"
-                                onClick={() => {
-                                    editor.clear();
-                                    setDraft(editor.data);
-                                    setSelected(null);
-                                    setPicker(null);
-                                }}
+                                onClick={() => transitionLayout(cancelEdit)}
                             >
-                                清空棋盘
-                            </button>
-                            <button
-                                className="ui-button quiet"
-                                onClick={() => {
-                                    editor.reset();
-                                    setDraft(editor.data);
-                                    setSelected(null);
-                                    setPicker(null);
-                                }}
-                            >
-                                默认布局
+                                取消
                             </button>
                             <button className="ui-button primary" onClick={saveEdit}>
                                 开始对弈
                             </button>
                         </>
                     ) : (
+                        <button
+                            className="ui-button"
+                            aria-pressed={recordVisible}
+                            onClick={() => {
+                                transitionLayout(() => {
+                                    onRecordVisibleChange(!recordVisible);
+                                    setReviewStep(null);
+                                    setSelected(null);
+                                });
+                            }}
+                        >
+                            <span className="toggle-dot" aria-hidden="true" />
+                            棋谱
+                        </button>
+                    )}
+                    <button className="ui-button" popoverTarget="game-menu">
+                        菜单
+                    </button>
+                </nav>
+            </header>
+            <div
+                id="game-menu"
+                className="game-menu"
+                popover="auto"
+                ref={menu}
+                aria-label="操作菜单"
+            >
+                <div className="menu-group">
+                    {editor ? (
                         <>
-                            {confirmReset && (
-                                <button
-                                    className="ui-button quiet"
-                                    onClick={() => setConfirmReset(false)}
-                                >
-                                    取消
-                                </button>
-                            )}
                             <button
-                                className={`ui-button${confirmReset ? ' primary' : ''}`}
-                                onClick={newGame}
+                                onClick={() => {
+                                    editor.clear();
+                                    setDraft(editor.data);
+                                    setSelected(null);
+                                    setPicker(null);
+                                    menu.current?.hidePopover();
+                                }}
                             >
-                                {confirmReset ? '确认新局' : '新局'}
+                                清空棋盘
+                            </button>
+                            <button
+                                onClick={() => {
+                                    editor.reset();
+                                    setDraft(editor.data);
+                                    setSelected(null);
+                                    setPicker(null);
+                                    menu.current?.hidePopover();
+                                }}
+                            >
+                                默认布局
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button
+                                disabled={reviewing}
+                                onClick={() => {
+                                    menu.current?.hidePopover();
+                                    transitionLayout(beginEdit);
+                                }}
+                            >
+                                摆子
+                            </button>
+                            <button
+                                onClick={() => {
+                                    menu.current?.hidePopover();
+                                    newGame();
+                                }}
+                            >
+                                新局
                             </button>
                         </>
                     )}
                 </div>
-            </nav>
+                <div className="menu-group">
+                    <button
+                        className="sound-toggle"
+                        role="switch"
+                        aria-label="音效"
+                        aria-checked={soundEnabled}
+                        onClick={() => onSoundEnabledChange(!soundEnabled)}
+                    >
+                        音效
+                        <span className="sound-switch" aria-hidden="true" />
+                    </button>
+                    <label className="volume-control">
+                        <input
+                            type="range"
+                            aria-label="音量"
+                            style={{ '--volume': `${volume * 100}%` } as CSSProperties}
+                            min="0"
+                            max="100"
+                            step="1"
+                            value={Math.round(volume * 100)}
+                            disabled={!soundEnabled}
+                            onChange={(event) => onVolumeChange(Number(event.target.value) / 100)}
+                        />
+                        <output>{Math.round(volume * 100)}%</output>
+                    </label>
+                    {document.fullscreenEnabled && (
+                        <button
+                            onClick={() => {
+                                menu.current?.hidePopover();
+                                void toggleFullscreen();
+                            }}
+                        >
+                            {fullscreen ? '退出全屏' : '全屏'}
+                        </button>
+                    )}
+                    <a
+                        href="?page=rules"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="规则（新标签页）"
+                        onClick={() => menu.current?.hidePopover()}
+                    >
+                        规则<span aria-hidden="true">↗</span>
+                    </a>
+                </div>
+            </div>
+            <dialog
+                className="reset-dialog"
+                aria-labelledby="reset-title"
+                ref={resetDialog}
+                onCancel={() => setConfirmReset(false)}
+            >
+                <h2 id="reset-title">开始新局？</h2>
+                <p>当前对局和棋谱将被替换。</p>
+                <div>
+                    <button
+                        className="ui-button quiet"
+                        autoFocus
+                        onClick={() => setConfirmReset(false)}
+                    >
+                        取消
+                    </button>
+                    <button className="ui-button primary" onClick={newGame}>
+                        开始新局
+                    </button>
+                </div>
+            </dialog>
             <BoardView
                 board={board}
                 selected={editor ? (selected ?? picker) : selected}
@@ -452,6 +515,7 @@ export default function App() {
     const [saved] = useState(loadSession);
     const [position, setPosition] = useState<BoardData | null>(null);
     const [soundEnabled, setSoundEnabled] = useState(saved?.soundEnabled ?? true);
+    const [volume, setVolume] = useState(saved?.volume ?? 0.5);
     const [recordVisible, setRecordVisible] = useState(saved?.recordVisible ?? true);
     const GameClient = useMemo(
         () =>
@@ -474,6 +538,8 @@ export default function App() {
             recordVisible={recordVisible}
             onRecordVisibleChange={setRecordVisible}
             onApplyPosition={setPosition}
+            volume={volume}
+            onVolumeChange={setVolume}
             soundEnabled={soundEnabled}
             onSoundEnabledChange={setSoundEnabled}
         />

@@ -34,6 +34,7 @@ describe('session storage', () => {
         saved.draft = saved.game.board.slice();
         saved.draft[Board.indexOf(4, 8)] = null;
         saved.soundEnabled = false;
+        saved.volume = 0.35;
         saved.recordVisible = false;
         saveSession(saved);
         expect(loadSession()).toEqual(saved);

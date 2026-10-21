@@ -8,16 +8,19 @@ export function useGameSounds(
     isCheck: boolean,
     enabled: boolean,
     winner: Side | null,
+    step: number,
+    volume: number,
 ) {
-    const [sounds] = useState(() => new GameSounds(state));
+    const [sounds] = useState(() => new GameSounds(state, step));
 
     useEffect(() => {
+        sounds.setVolume(volume);
         sounds.setEnabled(enabled);
-    }, [sounds, enabled]);
+    }, [sounds, enabled, volume]);
 
     useEffect(() => {
-        sounds.update(state, isCheck, winner);
-    }, [sounds, state, isCheck, winner]);
+        sounds.update(state, isCheck, winner, step);
+    }, [sounds, state, isCheck, winner, step]);
 
     useEffect(() => () => sounds.stop(), [sounds]);
 

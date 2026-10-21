@@ -18,14 +18,24 @@ const tracks = {
 
 export class GameSounds {
     private enabled = false;
+    private volume = 1;
     private current: HTMLAudioElement | null = null;
 
-    constructor(private previous: GameState) {}
+    constructor(
+        private previous: GameState,
+        private previousStep?: number,
+    ) {}
 
     setEnabled(enabled: boolean): void {
         this.enabled = enabled;
 
         if (!enabled) this.stop();
+    }
+
+    setVolume(volume: number): void {
+        this.volume = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 1;
+
+        if (this.current) this.current.volume = this.volume;
     }
 
     pick(): void {
@@ -36,13 +46,15 @@ export class GameSounds {
         this.play(illegal);
     }
 
-    update(state: GameState, isCheck: boolean, winner: Side | null = null): void {
+    update(state: GameState, isCheck: boolean, winner: Side | null = null, step?: number): void {
         const before = this.previous;
+        const forward = step === undefined || step === (this.previousStep ?? step) + 1;
+        this.previousStep = step;
 
         // 静音期间也跟进局面，重新开启时不补播过去的走子。
         this.previous = state;
 
-        if (!state.lastMove) {
+        if (!state.lastMove || !forward) {
             this.stop();
             return;
         }
@@ -76,6 +88,7 @@ export class GameSounds {
 
         this.stop();
         this.current = new Audio(source);
+        this.current.volume = this.volume;
         // 浏览器可能限制音频播放；音效失败不应中断对局。
         void this.current.play().catch(() => {});
     }

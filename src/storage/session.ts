@@ -9,6 +9,7 @@ export interface SavedSession {
     currentPlayer: '0' | '1';
     draft: BoardData | null;
     soundEnabled: boolean;
+    volume?: number;
     recordVisible?: boolean;
 }
 
@@ -54,6 +55,11 @@ export function loadSession(): SavedSession | null {
             saved.version !== 1 ||
             !['0', '1'].includes(saved.currentPlayer) ||
             typeof saved.soundEnabled !== 'boolean' ||
+            (saved.volume !== undefined &&
+                (typeof saved.volume !== 'number' ||
+                    !Number.isFinite(saved.volume) ||
+                    saved.volume < 0 ||
+                    saved.volume > 1)) ||
             (saved.recordVisible !== undefined && typeof saved.recordVisible !== 'boolean') ||
             !saved.game ||
             (saved.game.winner !== undefined &&
