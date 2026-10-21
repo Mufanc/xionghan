@@ -6,7 +6,7 @@ import { Side } from '@xionghan/core/piece';
 interface RecordPanelProps {
     record: RecordData | undefined;
     step: number;
-    onSelect: (step: number) => void;
+    onSelect?: (step: number) => void;
 }
 
 export function RecordPanel({ record, step, onSelect }: RecordPanelProps) {
@@ -62,7 +62,8 @@ export function RecordPanel({ record, step, onSelect }: RecordPanelProps) {
                                     key={column}
                                     className={move.side}
                                     aria-current={step === index + 1 ? 'step' : undefined}
-                                    onClick={() => onSelect(index + 1)}
+                                    disabled={!onSelect}
+                                    onClick={() => onSelect?.(index + 1)}
                                 >
                                     {move.name}
                                 </button>
@@ -74,24 +75,24 @@ export function RecordPanel({ record, step, onSelect }: RecordPanelProps) {
                 ))}
             </div>
             <div className="record-controls">
-                {step < moves.length && (
-                    <button className="return-to-game" onClick={() => onSelect(moves.length)}>
+                {onSelect && step < moves.length && (
+                    <button className="return-to-game" onClick={() => onSelect?.(moves.length)}>
                         回到对局
                     </button>
                 )}
                 <button
                     aria-label="起始局面"
                     title="起始局面"
-                    onClick={() => onSelect(0)}
-                    disabled={step === 0}
+                    onClick={() => onSelect?.(0)}
+                    disabled={!onSelect || step === 0}
                 >
                     |‹
                 </button>
                 <button
                     aria-label="上一步"
                     title="上一步"
-                    onClick={() => onSelect(step - 1)}
-                    disabled={step === 0}
+                    onClick={() => onSelect?.(step - 1)}
+                    disabled={!onSelect || step === 0}
                 >
                     ‹
                 </button>
@@ -101,16 +102,16 @@ export function RecordPanel({ record, step, onSelect }: RecordPanelProps) {
                 <button
                     aria-label="下一步"
                     title="下一步"
-                    onClick={() => onSelect(step + 1)}
-                    disabled={step === moves.length}
+                    onClick={() => onSelect?.(step + 1)}
+                    disabled={!onSelect || step === moves.length}
                 >
                     ›
                 </button>
                 <button
                     aria-label="最新局面"
                     title="最新局面"
-                    onClick={() => onSelect(moves.length)}
-                    disabled={step === moves.length}
+                    onClick={() => onSelect?.(moves.length)}
+                    disabled={!onSelect || step === moves.length}
                 >
                     ›|
                 </button>

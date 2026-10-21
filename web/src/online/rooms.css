@@ -1,0 +1,123 @@
+.room-page {
+    width: min(100%, 720px);
+    margin: auto;
+    padding: 28px 20px;
+    color: #584a39;
+}
+.room-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 28px;
+}
+.room-card {
+    padding: 24px;
+    border: 1px solid #c9bdab;
+    border-radius: 8px;
+    background: #f6f2e9;
+    box-shadow: 0 8px 28px #55452a12;
+}
+.room-card h2 {
+    margin: 0 0 12px;
+    font-size: 20px;
+    font-weight: 600;
+}
+.room-card p {
+    color: #817767;
+    font-size: 13px;
+    line-height: 1.7;
+}
+.room-field {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-size: 13px;
+    margin: 24px 0 16px;
+}
+.room-field input {
+    width: 100%;
+    min-width: 0;
+    padding: 12px;
+    background: #fffaf2;
+    border: 1px solid #c9bdab;
+    border-radius: 5px;
+    font: inherit;
+    color: inherit;
+}
+.room-field input:focus {
+    outline: 2px solid #aa9579;
+    outline-offset: 2px;
+}
+.room-side {
+    display: flex;
+    gap: 20px;
+    border: 0;
+    padding: 0;
+    margin: 0 0 24px;
+    font-size: 13px;
+}
+.room-side legend {
+    margin-bottom: 12px;
+}
+.room-side label {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.room-side input {
+    accent-color: #917756;
+}
+.room-join {
+    margin-top: 28px;
+    padding-top: 4px;
+    border-top: 1px solid #ded6c9;
+}
+.room-seats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-block: 24px;
+}
+.room-seats > div {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+    background: #ede8de;
+    border-radius: 5px;
+    font-size: 13px;
+}
+.room-seats strong {
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+.room-id {
+    overflow-wrap: anywhere;
+}
+.room-card .room-error {
+    color: #756047;
+}
+.share-dialog input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #c9bdab;
+    background: #fffaf2;
+    color: inherit;
+    border-radius: 4px;
+}
+.share-dialog {
+    width: min(420px, calc(100% - 32px));
+}
+@media (max-width: 600px) {
+    .room-page {
+        padding: 20px 12px;
+    }
+    .room-header h1 {
+        font-size: 20px;
+        letter-spacing: 2px;
+    }
+    .room-card {
+        padding: 20px;
+    }
+}

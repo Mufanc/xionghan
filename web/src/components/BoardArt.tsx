@@ -18,10 +18,19 @@ const stars = [
     [12, 12],
 ];
 
-export function BoardArt() {
+export function BoardArt({ flipped = false }: { flipped?: boolean }) {
     const url = useSkins()?.skin?.url('board.png');
 
-    if (url) return <img className="board-art" src={url} alt="" draggable={false} />;
+    if (url)
+        return (
+            <img
+                className="board-art"
+                style={flipped ? { rotate: '180deg' } : undefined}
+                src={url}
+                alt=""
+                draggable={false}
+            />
+        );
 
     return (
         <svg className="board-art" viewBox="0 0 1300 1300" aria-hidden="true">
@@ -98,7 +107,7 @@ export function BoardArt() {
                             textAnchor="middle"
                             dominantBaseline="middle"
                         >
-                            {'ABCDEFGHIJKLM'[index]}
+                            {'ABCDEFGHIJKLM'[flipped ? 12 - index : index]}
                         </text>
                     </g>
                 ))}

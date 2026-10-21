@@ -44,4 +44,14 @@ describe('BoardView without a game client', () => {
         expect(html.match(/disabled=""/g)).toHaveLength(169);
         expect(html).toContain('棋盒');
     });
+    it('rotates black to the bottom while preserving logical indices and readable column labels', () => {
+        const html = renderToStaticMarkup(
+            <BoardView {...props} flipped players={{ BLACK: '黑方棋友', RED: '红方棋友' }} />,
+        );
+        expect(html).toContain('id="point-0" style="grid-row:13;grid-column:13"');
+        expect(html).toContain('id="point-168" style="grid-row:1;grid-column:1"');
+        expect(html.indexOf('红方棋友')).toBeLessThan(html.indexOf('class="board"'));
+        expect(html.indexOf('黑方棋友')).toBeGreaterThan(html.indexOf('id="point-168"'));
+        expect(html).toMatch(/x="50"[^>]*>M<\/text>/);
+    });
 });

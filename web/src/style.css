@@ -536,6 +536,9 @@ i {
 .record-panel button:disabled {
     opacity: 0.35;
 }
+.record-list button:disabled {
+    opacity: 1;
+}
 .record-list {
     flex: 1;
     min-height: 0;

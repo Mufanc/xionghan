@@ -7,6 +7,8 @@ import { PositionMark } from '@/components/PositionMark';
 import { useMoveAnimation, type MoveAnimationState } from '@/hooks/use-move-animation';
 
 interface BoardViewProps {
+    flipped?: boolean;
+    players?: Partial<Record<Side, string>>;
     board: BoardData;
     selected: Index | null;
     selectionStyle: 'ring' | 'frame';
@@ -26,6 +28,8 @@ interface BoardViewProps {
 }
 
 export function BoardView({
+    flipped = false,
+    players,
     board,
     selected,
     selectionStyle,
@@ -43,7 +47,7 @@ export function BoardView({
     onCancel,
     children,
 }: BoardViewProps) {
-    const [cursor, setCursor] = useState<Index>(149);
+    const [cursor, setCursor] = useState<Index>(flipped ? 19 : 149);
     const { boardRef, captured, clearCapture } = useMoveAnimation(
         animationState,
         animateMoves,
@@ -52,7 +56,7 @@ export function BoardView({
     const sideName = (side: Side) => (side === Side.Red ? '红方' : '黑方');
 
     function navigate(event: KeyboardEvent<HTMLButtonElement>, index: Index) {
-        const { x, y } = Board.coordinatesOf(index);
+        const { x, y } = Board.coordinatesOf(flipped ? 168 - index : index);
 
         const offsets: Record<string, number> = {
             ArrowLeft: x > 0 ? -1 : 0,
@@ -69,20 +73,24 @@ export function BoardView({
 
         event.preventDefault();
 
-        const next = index + offsets[event.key];
+        const next = index + offsets[event.key] * (flipped ? -1 : 1);
 
         setCursor(next);
         boardRef.current?.querySelector<HTMLElement>(`#point-${next}`)?.focus();
     }
 
+    const topSide = flipped ? Side.Red : Side.Black;
+    const bottomSide = Side.opposite(topSide);
+
     return (
         <section className="play-area" aria-label="匈汉象棋对局">
             <div className="player-bar">
-                <span className={`player ${Side.Black}`}>
+                <span className={`player ${topSide}`}>
                     <i />
-                    黑方
+                    {sideName(topSide)}
+                    {players?.[topSide] ? ` · ${players[topSide]}` : ''}
                 </span>
-                <span>單 · 氏 · 都</span>
+                <span>{topSide === Side.Black ? '單 · 氏 · 都' : '皇 · 仕 · 相'}</span>
             </div>
             <div
                 ref={boardRef}
@@ -90,7 +98,7 @@ export function BoardView({
                 role="group"
                 aria-label="13乘13棋盘，方向键移动焦点，回车选子或落子，Escape取消选择"
             >
-                <BoardArt />
+                <BoardArt flipped={flipped} />
                 {board.map((occupant, index) => {
                     const { x, y } = Board.coordinatesOf(index);
                     const possible = destinations.includes(index);
@@ -107,6 +115,10 @@ export function BoardView({
                         <button
                             key={index}
                             id={`point-${index}`}
+                            style={{
+                                gridRow: (flipped ? 12 - y : y) + 1,
+                                gridColumn: (flipped ? 12 - x : x) + 1,
+                            }}
                             className={`point${active && selectionStyle === 'ring' ? ' selected' : ''}${possible ? ' possible' : ''}${isKingInCheck ? ' checked' : ''}${isDefeatedKing ? ' defeated' : ''}${blocked ? ' unavailable' : ''}`}
                             tabIndex={cursor === index ? 0 : -1}
                             aria-label={`${label}${possible ? '，可落子' : ''}${forbidden ? '，禁着：会使己方王受攻击或两王照面' : ''}${lastFrom ? '，上一步起点' : ''}${lastTo ? '，上一步落点' : ''}`}
@@ -145,11 +157,12 @@ export function BoardView({
                 {children}
             </div>
             <div className="player-bar">
-                <span className={`player ${Side.Red}`}>
+                <span className={`player ${bottomSide}`}>
                     <i />
-                    红方
+                    {sideName(bottomSide)}
+                    {players?.[bottomSide] ? ` · ${players[bottomSide]}` : ''}
                 </span>
-                <span>皇 · 仕 · 相</span>
+                <span>{bottomSide === Side.Red ? '皇 · 仕 · 相' : '單 · 氏 · 都'}</span>
             </div>
         </section>
     );

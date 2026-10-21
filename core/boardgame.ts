@@ -10,6 +10,8 @@ export const playerSide = (player: string): Side => (player === '0' ? Side.Red :
 
 export const gameConfig: GameConfig<GameState> = {
     name: 'XiongHan',
+    minPlayers: 2,
+    maxPlayers: 2,
     setup: () => Game.initialState(),
     turn: { minMoves: 1, maxMoves: 1 },
     disableUndo: true,

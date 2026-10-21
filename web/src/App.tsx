@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
 import { Client, type BoardProps } from 'boardgame.io/react';
+import { SocketIO } from 'boardgame.io/multiplayer';
+import { RoomPage, ConnectionPending } from '@/online/RoomPage';
+import { Rooms, invitationURL, type RoomSession } from '@/online/rooms';
 import { BoardView } from '@/components/BoardView';
 import { PiecePicker } from '@/components/PiecePicker';
 import { RecordPanel } from '@/components/RecordPanel';
@@ -33,6 +36,12 @@ const hints: Record<Kind, string> = {
 };
 
 interface GameBoardProps extends BoardProps<GameState> {
+    online?: RoomSession;
+    autoInvite?: boolean;
+    playStart?: boolean;
+    onNewGame?: () => void;
+    onOpenOnline: () => void;
+    onReturnLocal?: () => void;
     initialDraft: BoardData | null;
     recordVisible: boolean;
     onRecordVisibleChange: (visible: boolean) => void;
@@ -46,6 +55,16 @@ interface GameBoardProps extends BoardProps<GameState> {
 function GameBoard({
     G,
     ctx,
+    isActive,
+    isConnected,
+    matchData,
+    playerID,
+    online,
+    autoInvite = false,
+    playStart = false,
+    onNewGame,
+    onOpenOnline,
+    onReturnLocal,
     moves,
     onApplyPosition,
     initialDraft,
@@ -60,14 +79,21 @@ function GameBoard({
     const [selected, setSelected] = useState<Index | null>(null);
     const [confirmReset, setConfirmReset] = useState(false);
     const resetDialog = useRef<HTMLDialogElement>(null);
+    const shareDialog = useRef<HTMLDialogElement>(null);
+    const shareInput = useRef<HTMLInputElement>(null);
+    const invitationShown = useRef(false);
+    const [copied, setCopied] = useState(false);
     const menu = useRef<HTMLDivElement>(null);
     const [draft, setDraft] = useState<BoardData | null>(initialDraft);
     const [picker, setPicker] = useState<Index | null>(null);
     const [reviewStep, setReviewStep] = useState<number | null>(null);
     const [fullscreen, setFullscreen] = useState(!!document.fullscreenElement);
+    const opponent = matchData?.find((player) => String(player.id) !== playerID);
+    const waiting = !!online && !opponent?.name;
+    const canPlay = !online || (!!isConnected && isActive && !!opponent?.isConnected);
     const winner: Side | null = ctx.gameover?.winner ?? null;
     const totalSteps = G.record?.moves.length ?? 0;
-    const reviewing = reviewStep !== null && reviewStep < totalSteps;
+    const reviewing = !online && reviewStep !== null && reviewStep < totalSteps;
     const displayed = useMemo(
         () => (reviewing && G.record ? new GameRecord(G.record).stateAt(reviewStep!) : G),
         [G, reviewing, reviewStep],
@@ -81,9 +107,13 @@ function GameBoard({
             ? (G.record.moves[reviewStep!]?.side ?? playerSide(ctx.currentPlayer))
             : playerSide(ctx.currentPlayer);
     const destinations =
-        editor || reviewing || winner || selected === null ? [] : game.findLegalMoves(selected);
+        editor || reviewing || winner || !canPlay || selected === null
+            ? []
+            : game.findLegalMoves(selected);
     const forbiddenDestinations =
-        editor || reviewing || winner || selected === null ? [] : game.findForbiddenMoves(selected);
+        editor || reviewing || winner || !canPlay || selected === null
+            ? []
+            : game.findForbiddenMoves(selected);
     const isCheck = !editor && (reviewing || !winner) && game.isCheck(side);
     const unavailablePieces = isCheck
         ? board.flatMap((occupant, index) =>
@@ -92,20 +122,30 @@ function GameBoard({
         : [];
     const sounds = useGameSounds(
         displayed,
-        isCheck,
         soundEnabled && !editor,
         reviewing ? null : winner,
         reviewing ? reviewStep! : totalSteps,
         volume,
+        online && isConnected && opponent?.isConnected && totalSteps === 0
+            ? `${import.meta.env.VITE_SERVER_URL || location.origin}:${online.matchID}:${online.playerID}`
+            : playStart
+              ? 'local'
+              : undefined,
     );
     const sideName = (value: string) => (value === Side.Red ? '红方' : '黑方');
     const status = editor
         ? '摆子中'
-        : reviewing
-          ? `第 ${reviewStep} 步`
-          : winner
-            ? `${sideName(winner)}胜`
-            : `${sideName(side)}行棋${isCheck ? ' · 将军' : ''}`;
+        : online && !isConnected
+          ? '正在重连…'
+          : waiting
+            ? '等待对手加入'
+            : online && !opponent?.isConnected
+              ? '等待对手重连'
+              : reviewing
+                ? `第 ${reviewStep} 步`
+                : winner
+                  ? `${sideName(winner)}胜`
+                  : `${sideName(side)}行棋${isCheck ? ' · 将军' : ''}`;
 
     useEffect(() => {
         const update = () => setFullscreen(!!document.fullscreenElement);
@@ -146,6 +186,8 @@ function GameBoard({
     }
 
     useEffect(() => {
+        if (online) return;
+
         saveSession({
             version: 1,
             game: G,
@@ -155,7 +197,7 @@ function GameBoard({
             volume,
             recordVisible,
         });
-    }, [G, ctx.currentPlayer, draft, soundEnabled, volume, recordVisible]);
+    }, [G, ctx.currentPlayer, draft, soundEnabled, volume, recordVisible, online]);
 
     useEffect(() => {
         if (picker === null) return;
@@ -222,7 +264,7 @@ function GameBoard({
     }
 
     function beginEdit() {
-        if (reviewing) return;
+        if (reviewing || online) return;
 
         setDraft(G.board.slice());
         setSelected(null);
@@ -255,7 +297,7 @@ function GameBoard({
             return;
         }
 
-        if (reviewing || winner || unavailablePieces.includes(index)) return;
+        if (!canPlay || reviewing || winner || unavailablePieces.includes(index)) return;
 
         if (index === selected) {
             setSelected(null);
@@ -273,14 +315,48 @@ function GameBoard({
     }
 
     function newGame() {
+        if (online) return;
+
         if (G.lastMove && !confirmReset) {
             setConfirmReset(true);
             return;
         }
 
-        onApplyPosition(new Board().data);
+        onNewGame?.();
         setSelected(null);
         setConfirmReset(false);
+    }
+
+    useEffect(() => setSelected(null), [ctx.currentPlayer, isConnected]);
+
+    function share() {
+        setCopied(false);
+        shareDialog.current?.showModal();
+    }
+
+    useEffect(() => {
+        const dialog = shareDialog.current;
+        if (!dialog) return;
+
+        if (opponent?.isConnected) {
+            dialog.close();
+            invitationShown.current = true;
+        } else if (autoInvite && !invitationShown.current) {
+            invitationShown.current = true;
+            dialog.showModal();
+        }
+    }, [autoInvite, opponent?.isConnected]);
+
+    async function copyInvitation() {
+        if (!online) return;
+
+        try {
+            await navigator.clipboard.writeText(invitationURL(online.matchID));
+            setCopied(true);
+        } catch {
+            shareInput.current?.focus();
+            shareInput.current?.select();
+        }
     }
 
     return (
@@ -293,11 +369,25 @@ function GameBoard({
                         弈
                     </span>
                     <h1>
-                        匈汉象棋<small>十三路 · 同屏对弈</small>
+                        匈汉象棋
+                        <small>
+                            {online
+                                ? `联机对弈 · 执${online.playerID === '0' ? '红' : '黑'}`
+                                : '十三路 · 同屏对弈'}
+                        </small>
                     </h1>
                 </div>
                 <nav className="view-controls" aria-label={editor ? '摆子操作' : '对局操作'}>
-                    {editor ? (
+                    {!online && !editor && (
+                        <button className="ui-button primary" onClick={onOpenOnline}>
+                            联机对弈
+                        </button>
+                    )}
+                    {waiting ? (
+                        <button className="ui-button" onClick={share}>
+                            邀请朋友
+                        </button>
+                    ) : editor ? (
                         <>
                             <button
                                 className="ui-button quiet"
@@ -338,7 +428,19 @@ function GameBoard({
                 aria-label="操作菜单"
             >
                 <div className="menu-group">
-                    {editor ? (
+                    {online ? (
+                        <>
+                            <button
+                                onClick={() => {
+                                    menu.current?.hidePopover();
+                                    share();
+                                }}
+                            >
+                                邀请朋友
+                            </button>
+                            <button onClick={onReturnLocal}>返回本地</button>
+                        </>
+                    ) : editor ? (
                         <>
                             <button
                                 onClick={() => {
@@ -460,7 +562,47 @@ function GameBoard({
                     </button>
                 </div>
             </dialog>
+            {online && (
+                <dialog
+                    className="reset-dialog share-dialog"
+                    ref={shareDialog}
+                    aria-labelledby="share-title"
+                >
+                    <h2 id="share-title">邀请朋友</h2>
+                    <p>将链接发给对方，即可加入这盘棋。</p>
+                    <input
+                        ref={shareInput}
+                        aria-label="邀请链接"
+                        value={invitationURL(online.matchID)}
+                        readOnly
+                        onFocus={(event) => event.target.select()}
+                    />
+                    <p role="status">{copied ? '链接已复制' : `房间 ${online.matchID}`}</p>
+                    <div>
+                        <button
+                            className="ui-button quiet"
+                            onClick={() => shareDialog.current?.close()}
+                        >
+                            关闭
+                        </button>
+                        <button className="ui-button" onClick={() => void copyInvitation()}>
+                            {copied ? '已复制' : '复制链接'}
+                        </button>
+                    </div>
+                </dialog>
+            )}
             <BoardView
+                flipped={online?.playerID === '1'}
+                players={
+                    online
+                        ? {
+                              [Side.Red]:
+                                  matchData?.find((player) => player.id === 0)?.name ?? '等待加入',
+                              [Side.Black]:
+                                  matchData?.find((player) => player.id === 1)?.name ?? '等待加入',
+                          }
+                        : undefined
+                }
                 board={board}
                 selected={editor ? (selected ?? picker) : selected}
                 selectionStyle={editor ? 'frame' : 'ring'}
@@ -482,7 +624,7 @@ function GameBoard({
                           )
                         : -1
                 }
-                disabled={!editor && (reviewing || !!winner)}
+                disabled={!editor && (reviewing || !!winner || !canPlay)}
                 animationState={displayed}
                 animationStep={reviewing ? reviewStep! : totalSteps}
                 animateMoves={!editor}
@@ -504,7 +646,9 @@ function GameBoard({
                 {!editor && !reviewing && (
                     <p aria-live="polite">
                         {winner
-                            ? '对局结束，点击「新局」再来一盘。'
+                            ? online
+                                ? '对局结束。'
+                                : '对局结束，点击「新局」再来一盘。'
                             : piece
                               ? `${Piece.nameOf(piece.side, piece.kind)} · ${hints[piece.kind]}${forbiddenDestinations.length ? ' 红点为禁着：会使己方王受攻击或两王照面。' : ''}`
                               : '点选己方棋子，再点选落点。红方先行。'}
@@ -515,20 +659,25 @@ function GameBoard({
                 <RecordPanel
                     record={G.record}
                     step={reviewing ? reviewStep! : totalSteps}
-                    onSelect={(step) => {
-                        setReviewStep(step === totalSteps ? null : step);
-                        setSelected(null);
-                        setPicker(null);
-                    }}
+                    onSelect={
+                        online
+                            ? undefined
+                            : (step) => {
+                                  setReviewStep(step === totalSteps ? null : step);
+                                  setSelected(null);
+                                  setPicker(null);
+                              }
+                    }
                 />
             )}
         </main>
     );
 }
 
-export default function App() {
+function LocalGame({ onOpenOnline }: { onOpenOnline: () => void }) {
     const [saved] = useState(loadSession);
     const [position, setPosition] = useState<BoardData | null>(null);
+    const [playStart, setPlayStart] = useState(false);
     const [soundEnabled, setSoundEnabled] = useState(saved?.soundEnabled ?? true);
     const [volume, setVolume] = useState(saved?.volume ?? 0.5);
     const [recordVisible, setRecordVisible] = useState(saved?.recordVisible ?? true);
@@ -548,17 +697,119 @@ export default function App() {
     );
 
     return (
-        <SkinProvider>
-            <GameClient
-                initialDraft={position ? null : (saved?.draft ?? null)}
+        <GameClient
+            onOpenOnline={onOpenOnline}
+            initialDraft={position ? null : (saved?.draft ?? null)}
+            recordVisible={recordVisible}
+            onRecordVisibleChange={setRecordVisible}
+            playStart={playStart}
+            onNewGame={() => {
+                setPlayStart(true);
+                setPosition(new Board().data);
+            }}
+            onApplyPosition={(board) => {
+                setPlayStart(false);
+                setPosition(board);
+            }}
+            volume={volume}
+            onVolumeChange={setVolume}
+            soundEnabled={soundEnabled}
+            onSoundEnabledChange={setSoundEnabled}
+        />
+    );
+}
+
+function GameApp() {
+    const [rooms] = useState(() => new Rooms());
+    const [route, setRoute] = useState(() => new URLSearchParams(location.search).get('room'));
+    const [online, setOnline] = useState<RoomSession | null>(null);
+    const [autoInvite, setAutoInvite] = useState(false);
+    const [preferences] = useState(loadSession);
+    const [soundEnabled, setSoundEnabled] = useState(preferences?.soundEnabled ?? true);
+    const [volume, setVolume] = useState(preferences?.volume ?? 0.5);
+    const [recordVisible, setRecordVisible] = useState(preferences?.recordVisible ?? true);
+
+    const navigate = useCallback((room: string | null) => {
+        const url = new URL(location.href);
+        if (room === null) url.searchParams.delete('room');
+        else url.searchParams.set('room', room);
+        history.pushState(null, '', url);
+        setOnline(null);
+        setRoute(room);
+    }, []);
+    const enter = useCallback((session: RoomSession, created = false) => {
+        const url = new URL(location.href);
+        url.searchParams.set('room', session.matchID);
+        history.replaceState(null, '', url);
+        setRoute(session.matchID);
+        setAutoInvite(created);
+        setOnline(session);
+    }, []);
+    const back = useCallback(() => navigate(null), [navigate]);
+    const returnToRoom = useCallback(() => setOnline(null), []);
+    const OnlineClient = useMemo(
+        () =>
+            Client<GameState, GameBoardProps>({
+                game: gameConfig,
+                board: GameBoard,
+                multiplayer: SocketIO({ server: rooms.server }),
+                numPlayers: 2,
+                debug: false,
+                loading: () => <ConnectionPending onBack={back} />,
+            }),
+        [rooms, back],
+    );
+
+    useEffect(() => {
+        const update = () => {
+            setOnline(null);
+            setRoute(new URLSearchParams(location.search).get('room'));
+        };
+        window.addEventListener('popstate', update);
+        return () => window.removeEventListener('popstate', update);
+    }, []);
+
+    if (online)
+        return (
+            <OnlineClient
+                key={`${online.matchID}:${online.playerID}`}
+                matchID={online.matchID}
+                playerID={online.playerID}
+                credentials={online.credentials}
+                online={online}
+                autoInvite={autoInvite}
+                initialDraft={null}
+                onOpenOnline={returnToRoom}
+                onReturnLocal={back}
+                onApplyPosition={() => {}}
                 recordVisible={recordVisible}
                 onRecordVisibleChange={setRecordVisible}
-                onApplyPosition={setPosition}
-                volume={volume}
-                onVolumeChange={setVolume}
                 soundEnabled={soundEnabled}
                 onSoundEnabledChange={setSoundEnabled}
+                volume={volume}
+                onVolumeChange={setVolume}
             />
+        );
+
+    if (route !== null)
+        return (
+            <RoomPage
+                key={route}
+                rooms={rooms}
+                matchID={route}
+                onEnter={enter}
+                onFind={navigate}
+                onBack={back}
+            />
+        );
+
+    return <LocalGame onOpenOnline={() => navigate('')} />;
+}
+
+export default function App() {
+    return (
+        <SkinProvider>
+            <GameApp />
         </SkinProvider>
     );
 }

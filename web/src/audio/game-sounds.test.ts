@@ -155,4 +155,20 @@ describe('presentation-layer game sounds', () => {
         sounds.stop();
         expect(instances[1].pause).toHaveBeenCalledOnce();
     });
+    it('does not cut off a local move when the server confirms the same ply with cloned state', () => {
+        const initial = Game.initialState();
+        const sounds = new GameSounds(initial, 0);
+        sounds.setEnabled(true);
+        const next = moved(initial, Board.indexOf(2, 8), Board.indexOf(2, 5));
+        sounds.update(next, false, null, 1);
+        const audio = instances[0];
+        expect(audio.play).toHaveBeenCalledOnce();
+        sounds.update(structuredClone(next), false, null, 1);
+        expect(instances).toHaveLength(1);
+        expect(audio.pause).not.toHaveBeenCalled();
+        const reply = moved(next, Board.indexOf(2, 4), Board.indexOf(2, 5));
+        sounds.update(reply, false, null, 2);
+        expect(audio.pause).toHaveBeenCalledOnce();
+        expect(instances[1].src).toMatch(/capture-opponent\.ogg$/);
+    });
 });

@@ -2,3 +2,7 @@ packages:
     - core
     - web
     - server
+packageExtensions:
+    boardgame.io@0.50.2:
+        dependencies:
+            node-persist: ^4.0.4
