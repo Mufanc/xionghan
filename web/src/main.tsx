@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom/client';
 import '@/style.css';
 import { UpdateNotice } from '@/components/UpdateNotice';
 
+document.getElementById('root')!.dataset.started = 'true';
+
 const showingRules = new URLSearchParams(location.search).get('page') === 'rules';
 
 const Page = React.lazy(() =>
