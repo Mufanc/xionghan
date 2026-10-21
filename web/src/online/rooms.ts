@@ -1,4 +1,22 @@
 import { LobbyClient, LobbyClientError } from 'boardgame.io/client';
+import type { Side } from '@xionghan/core/piece';
+import type { ImportedRecord } from '@/storage/record-file';
+
+export interface WaitingRoom {
+    matchID: string;
+    host: string;
+    side: '0' | '1';
+    createdAt: number;
+}
+
+export interface MyMatch {
+    matchID: string;
+    playerID: '0' | '1';
+    players: { id: number; name?: string }[];
+    gameover: { winner: Side } | null;
+    updatedAt: number;
+    expiresAt: number | null;
+}
 
 export interface RoomSession {
     matchID: string;
@@ -51,10 +69,73 @@ export function roomError(error: unknown): string {
 export class Rooms {
     readonly server: string;
     readonly lobby: LobbyClient;
+    private identityRequest: Promise<void> | null = null;
+    private migrated = false;
 
     constructor(server = import.meta.env.VITE_API_SERVER_URL || location.origin) {
         this.server = server.replace(/\/$/, '');
         this.lobby = new LobbyClient({ server: this.server });
+    }
+
+    private async request<T>(path: string, signal = AbortSignal.timeout(10000)): Promise<T> {
+        const response = await fetch(`${this.server}/games/XiongHan/${path}`, {
+            credentials: 'include',
+            signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]),
+        });
+
+        if (!response.ok) throw new LobbyClientError(`HTTP status ${response.status}`, {});
+
+        return response.json();
+    }
+
+    ensureIdentity(): Promise<void> {
+        return (this.identityRequest ??= this.request('me').then(
+            () => {},
+            (error) => {
+                this.identityRequest = null;
+                throw error;
+            },
+        ));
+    }
+
+    async mine(signal: AbortSignal): Promise<MyMatch[]> {
+        await this.ensureIdentity();
+
+        if (!this.migrated) {
+            const legacy = this.latest();
+
+            if (legacy) {
+                try {
+                    await this.resume(legacy);
+                } catch (error) {
+                    if (!(
+                        error instanceof LobbyClientError &&
+                        /HTTP status (403|404)/.test(error.message)
+                    ))
+                        throw error;
+                }
+            }
+
+            this.migrated = true;
+        }
+
+        return (await this.request<{ matches: MyMatch[] }>('me', signal)).matches;
+    }
+
+    async recover(matchID: string): Promise<RoomSession | null> {
+        await this.ensureIdentity();
+
+        try {
+            return await this.request<RoomSession>(`${roomIDFrom(matchID)}/session`);
+        } catch (error) {
+            if (error instanceof LobbyClientError && /HTTP status 403/.test(error.message))
+                return null;
+            throw error;
+        }
+    }
+
+    record(matchID: string): Promise<ImportedRecord> {
+        return this.request(`${roomIDFrom(matchID)}/record`);
     }
 
     private key(matchID: string) {
@@ -98,7 +179,19 @@ export class Rooms {
         });
     }
 
+    async waiting(signal: AbortSignal): Promise<WaitingRoom[]> {
+        const response = await fetch(`${this.server}/games/XiongHan/waiting`, {
+            signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]),
+        });
+
+        if (!response.ok) throw new LobbyClientError(`HTTP status ${response.status}`, {});
+
+        return (await response.json()).rooms;
+    }
+
     async resume(session: RoomSession) {
+        await this.ensureIdentity();
+
         try {
             await this.lobby.updatePlayer(
                 'XiongHan',
@@ -108,7 +201,7 @@ export class Rooms {
                     credentials: session.credentials,
                     newName: session.playerName,
                 },
-                { signal: AbortSignal.timeout(10000) },
+                { signal: AbortSignal.timeout(10000), credentials: 'include' },
             );
         } catch (error) {
             if (error instanceof LobbyClientError && /HTTP status (403|404)/.test(error.message)) {
@@ -126,6 +219,7 @@ export class Rooms {
 
         if (!playerName || playerName.length > 24) throw new Error('称呼请填写 1 至 24 个字。');
 
+        await this.ensureIdentity();
         const joined = await this.lobby.joinMatch(
             'XiongHan',
             matchID,
@@ -133,7 +227,7 @@ export class Rooms {
                 playerName,
                 playerID,
             },
-            { signal: AbortSignal.timeout(10000) },
+            { signal: AbortSignal.timeout(10000), credentials: 'include' },
         );
 
         if (joined.playerID !== '0' && joined.playerID !== '1') {
@@ -151,26 +245,23 @@ export class Rooms {
             localStorage.setItem(this.key(matchID), JSON.stringify(session));
             localStorage.setItem(`xionghan.last-room:${this.server}`, matchID);
         } catch {
-            await this.lobby.leaveMatch('XiongHan', matchID, {
-                playerID: session.playerID,
-                credentials: session.credentials,
-            });
-            throw new Error('浏览器无法保存座位，请允许本地存储后再加入。');
+            // 座位已与 HttpOnly 身份关联，本地存储不可用不影响恢复。
         }
 
         return session;
     }
 
-    async create(name: string, side: '0' | '1') {
+    async create(name: string, side: '0' | '1', unlisted = false) {
         if (!name.trim() || name.trim().length > 24) throw new Error('称呼请填写 1 至 24 个字。');
 
+        await this.ensureIdentity();
         const { matchID } = await this.lobby.createMatch(
             'XiongHan',
             {
                 numPlayers: 2,
-                unlisted: true,
+                unlisted,
             },
-            { signal: AbortSignal.timeout(10000) },
+            { signal: AbortSignal.timeout(10000), credentials: 'include' },
         );
 
         return this.join(matchID, name, side);

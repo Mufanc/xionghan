@@ -21,6 +21,12 @@ import { Game, type GameState } from '@xionghan/core/game';
 import { useGameSounds } from '@/hooks/use-game-sounds';
 import { SkinProvider, useSkins } from '@/skins/SkinProvider';
 import { loadSession, saveSession } from '@/storage/session';
+import {
+    downloadRecord,
+    parseRecord,
+    MAX_RECORD_BYTES,
+    type ImportedRecord,
+} from '@/storage/record-file';
 
 const hints: Record<Kind, string> = {
     [Kind.King]: '宫内直走一格；两王不可照面。',
@@ -37,11 +43,14 @@ const hints: Record<Kind, string> = {
 
 interface GameBoardProps extends BoardProps<GameState> {
     online?: RoomSession;
+    archive?: boolean;
     autoInvite?: boolean;
     playStart?: boolean;
     onNewGame?: () => void;
+    onImportRecord?: (record: ImportedRecord) => void;
+    initialReview?: boolean;
     onOpenOnline: () => void;
-    onReturnLocal?: () => void;
+    onReturnLobby?: () => void;
     initialDraft: BoardData | null;
     recordVisible: boolean;
     onRecordVisibleChange: (visible: boolean) => void;
@@ -60,11 +69,14 @@ function GameBoard({
     matchData,
     playerID,
     online,
+    archive = false,
     autoInvite = false,
     playStart = false,
     onNewGame,
+    onImportRecord,
+    initialReview = false,
     onOpenOnline,
-    onReturnLocal,
+    onReturnLobby,
     moves,
     onApplyPosition,
     initialDraft,
@@ -76,6 +88,29 @@ function GameBoard({
     onVolumeChange,
 }: GameBoardProps) {
     const skins = useSkins();
+    const recordInput = useRef<HTMLInputElement>(null);
+    const importDialog = useRef<HTMLDialogElement>(null);
+    const [pendingRecord, setPendingRecord] = useState<ImportedRecord | null>(null);
+    const [recordError, setRecordError] = useState('');
+    const [readingRecord, setReadingRecord] = useState(false);
+
+    async function readRecord(file: File) {
+        setPendingRecord(null);
+        setRecordError('');
+        setReadingRecord(true);
+        importDialog.current?.showModal();
+
+        try {
+            if (file.size > MAX_RECORD_BYTES) throw new Error('棋谱文件不能超过 10 MB。');
+
+            setPendingRecord(parseRecord(await file.text()));
+        } catch (error) {
+            setRecordError(error instanceof Error ? error.message : '无法读取棋谱。');
+        } finally {
+            setReadingRecord(false);
+        }
+    }
+
     const [selected, setSelected] = useState<Index | null>(null);
     const [confirmReset, setConfirmReset] = useState(false);
     const resetDialog = useRef<HTMLDialogElement>(null);
@@ -86,11 +121,11 @@ function GameBoard({
     const menu = useRef<HTMLDivElement>(null);
     const [draft, setDraft] = useState<BoardData | null>(initialDraft);
     const [picker, setPicker] = useState<Index | null>(null);
-    const [reviewStep, setReviewStep] = useState<number | null>(null);
+    const [reviewStep, setReviewStep] = useState<number | null>(initialReview ? 0 : null);
     const [fullscreen, setFullscreen] = useState(!!document.fullscreenElement);
     const opponent = matchData?.find((player) => String(player.id) !== playerID);
     const waiting = !!online && !opponent?.name;
-    const canPlay = !online || (!!isConnected && isActive && !!opponent?.isConnected);
+    const canPlay = !archive && (!online || (!!isConnected && isActive && !!opponent?.isConnected));
     const winner: Side | null = ctx.gameover?.winner ?? null;
     const totalSteps = G.record?.moves.length ?? 0;
     const reviewing = !online && reviewStep !== null && reviewStep < totalSteps;
@@ -186,7 +221,7 @@ function GameBoard({
     }
 
     useEffect(() => {
-        if (online) return;
+        if (online || archive) return;
 
         const persist = () =>
             saveSession({
@@ -203,7 +238,7 @@ function GameBoard({
         window.addEventListener('pagehide', persist);
 
         return () => window.removeEventListener('pagehide', persist);
-    }, [G, ctx.currentPlayer, draft, soundEnabled, volume, recordVisible, online]);
+    }, [G, ctx.currentPlayer, draft, soundEnabled, volume, recordVisible, online, archive]);
 
     useEffect(() => {
         if (picker === null) return;
@@ -344,14 +379,14 @@ function GameBoard({
         const dialog = shareDialog.current;
         if (!dialog) return;
 
-        if (opponent?.isConnected) {
+        if (!waiting) {
             dialog.close();
             invitationShown.current = true;
         } else if (autoInvite && !invitationShown.current) {
             invitationShown.current = true;
             dialog.showModal();
         }
-    }, [autoInvite, opponent?.isConnected]);
+    }, [autoInvite, waiting]);
 
     async function copyInvitation() {
         if (!online) return;
@@ -379,16 +414,13 @@ function GameBoard({
                         <small>
                             {online
                                 ? `联机对弈 · 执${online.playerID === '0' ? '红' : '黑'}`
-                                : '十三路 · 同屏对弈'}
+                                : archive
+                                  ? '历史对局 · 复盘'
+                                  : '十三路 · 同屏对弈'}
                         </small>
                     </h1>
                 </div>
                 <nav className="view-controls" aria-label={editor ? '摆子操作' : '对局操作'}>
-                    {!online && !editor && (
-                        <button className="ui-button primary" onClick={onOpenOnline}>
-                            联机对弈
-                        </button>
-                    )}
                     {waiting ? (
                         <button className="ui-button" onClick={share}>
                             邀请朋友
@@ -424,6 +456,11 @@ function GameBoard({
                     <button className="ui-button" popoverTarget="game-menu">
                         菜单
                     </button>
+                    {!online && !editor && (
+                        <button className="ui-button primary" onClick={onOpenOnline}>
+                            联机
+                        </button>
+                    )}
                 </nav>
             </header>
             <div
@@ -434,17 +471,21 @@ function GameBoard({
                 aria-label="操作菜单"
             >
                 <div className="menu-group">
-                    {online ? (
+                    {archive ? (
+                        <button onClick={onReturnLobby}>返回大厅</button>
+                    ) : online ? (
                         <>
-                            <button
-                                onClick={() => {
-                                    menu.current?.hidePopover();
-                                    share();
-                                }}
-                            >
-                                邀请朋友
-                            </button>
-                            <button onClick={onReturnLocal}>返回本地</button>
+                            {waiting && (
+                                <button
+                                    onClick={() => {
+                                        menu.current?.hidePopover();
+                                        share();
+                                    }}
+                                >
+                                    邀请朋友
+                                </button>
+                            )}
+                            <button onClick={onReturnLobby}>返回大厅</button>
                         </>
                     ) : editor ? (
                         <>
@@ -493,6 +534,29 @@ function GameBoard({
                         </>
                     )}
                 </div>
+                {!editor && (
+                    <div className="menu-group">
+                        <button
+                            onClick={() => {
+                                menu.current?.hidePopover();
+                                downloadRecord(G, ctx.currentPlayer);
+                            }}
+                        >
+                            导出棋谱
+                        </button>
+                        {onImportRecord && (
+                            <button
+                                disabled={readingRecord}
+                                onClick={() => {
+                                    menu.current?.hidePopover();
+                                    recordInput.current?.click();
+                                }}
+                            >
+                                导入棋谱
+                            </button>
+                        )}
+                    </div>
+                )}
                 <div className="menu-group">
                     <button
                         className="sound-toggle"
@@ -547,6 +611,54 @@ function GameBoard({
                     </a>
                 </div>
             </div>
+            {onImportRecord && (
+                <>
+                    <input
+                        hidden
+                        type="file"
+                        accept=".json,application/json"
+                        ref={recordInput}
+                        onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            event.target.value = '';
+                            if (file) void readRecord(file);
+                        }}
+                    />
+                    <dialog
+                        ref={importDialog}
+                        className="reset-dialog"
+                        aria-labelledby="import-title"
+                    >
+                        <h2 id="import-title">导入棋谱</h2>
+                        <p role="status">
+                            {readingRecord
+                                ? '正在校验棋谱…'
+                                : recordError ||
+                                  `共 ${pendingRecord?.game.record?.moves.length ?? 0} 手。导入将替换当前本地对局和棋谱。`}
+                        </p>
+                        <div>
+                            <button
+                                className="ui-button quiet"
+                                autoFocus
+                                onClick={() => importDialog.current?.close()}
+                            >
+                                取消
+                            </button>
+                            {pendingRecord && (
+                                <button
+                                    className="ui-button primary"
+                                    onClick={() => {
+                                        importDialog.current?.close();
+                                        onImportRecord(pendingRecord);
+                                    }}
+                                >
+                                    导入并复盘
+                                </button>
+                            )}
+                        </div>
+                    </dialog>
+                </>
+            )}
             <dialog
                 className="reset-dialog"
                 aria-labelledby="reset-title"
@@ -681,7 +793,8 @@ function GameBoard({
 }
 
 function LocalGame({ onOpenOnline }: { onOpenOnline: () => void }) {
-    const [saved] = useState(loadSession);
+    const [saved, setSaved] = useState(loadSession);
+    const [initialReview, setInitialReview] = useState(false);
     const [position, setPosition] = useState<BoardData | null>(null);
     const [playStart, setPlayStart] = useState(false);
     const [soundEnabled, setSoundEnabled] = useState(saved?.soundEnabled ?? true);
@@ -705,16 +818,33 @@ function LocalGame({ onOpenOnline }: { onOpenOnline: () => void }) {
     return (
         <GameClient
             onOpenOnline={onOpenOnline}
+            initialReview={initialReview}
+            onImportRecord={(record) => {
+                setPlayStart(false);
+                setInitialReview(true);
+                setPosition(null);
+                setRecordVisible(true);
+                setSaved({
+                    ...record,
+                    version: 1,
+                    draft: null,
+                    soundEnabled,
+                    volume,
+                    recordVisible: true,
+                });
+            }}
             initialDraft={position ? null : (saved?.draft ?? null)}
             recordVisible={recordVisible}
             onRecordVisibleChange={setRecordVisible}
             playStart={playStart}
             onNewGame={() => {
                 setPlayStart(true);
+                setInitialReview(false);
                 setPosition(new Board().data);
             }}
             onApplyPosition={(board) => {
                 setPlayStart(false);
+                setInitialReview(false);
                 setPosition(board);
             }}
             volume={volume}
@@ -727,9 +857,13 @@ function LocalGame({ onOpenOnline }: { onOpenOnline: () => void }) {
 
 function GameApp() {
     const [rooms] = useState(() => new Rooms());
+    useEffect(() => {
+        void rooms.ensureIdentity().catch((error) => console.warn('暂时无法登记联机身份', error));
+    }, [rooms]);
     const [route, setRoute] = useState(() => new URLSearchParams(location.search).get('room'));
     const [online, setOnline] = useState<RoomSession | null>(null);
     const [autoInvite, setAutoInvite] = useState(false);
+    const [archive, setArchive] = useState<ImportedRecord | null>(null);
     const [preferences] = useState(loadSession);
     const [soundEnabled, setSoundEnabled] = useState(preferences?.soundEnabled ?? true);
     const [volume, setVolume] = useState(preferences?.volume ?? 0.5);
@@ -741,6 +875,7 @@ function GameApp() {
         else url.searchParams.set('room', room);
         history.pushState(null, '', url);
         setOnline(null);
+        setArchive(null);
         setRoute(room);
     }, []);
     const enter = useCallback((session: RoomSession, created = false) => {
@@ -752,7 +887,7 @@ function GameApp() {
         setOnline(session);
     }, []);
     const back = useCallback(() => navigate(null), [navigate]);
-    const returnToRoom = useCallback(() => setOnline(null), []);
+    const returnToLobby = useCallback(() => navigate(''), [navigate]);
     const OnlineClient = useMemo(
         () =>
             Client<GameState, GameBoardProps>({
@@ -769,11 +904,43 @@ function GameApp() {
     useEffect(() => {
         const update = () => {
             setOnline(null);
+            setArchive(null);
             setRoute(new URLSearchParams(location.search).get('room'));
         };
         window.addEventListener('popstate', update);
         return () => window.removeEventListener('popstate', update);
     }, []);
+
+    const ArchiveClient = useMemo(
+        () =>
+            archive
+                ? Client<GameState, GameBoardProps>({
+                      game: gameFromSession(archive.game, archive.currentPlayer),
+                      board: GameBoard,
+                      numPlayers: 2,
+                      debug: false,
+                  })
+                : null,
+        [archive],
+    );
+
+    if (ArchiveClient)
+        return (
+            <ArchiveClient
+                archive
+                initialReview
+                initialDraft={null}
+                onOpenOnline={() => navigate('')}
+                onReturnLobby={() => navigate('')}
+                onApplyPosition={() => {}}
+                recordVisible={recordVisible}
+                onRecordVisibleChange={setRecordVisible}
+                soundEnabled={soundEnabled}
+                onSoundEnabledChange={setSoundEnabled}
+                volume={volume}
+                onVolumeChange={setVolume}
+            />
+        );
 
     if (online)
         return (
@@ -785,8 +952,8 @@ function GameApp() {
                 online={online}
                 autoInvite={autoInvite}
                 initialDraft={null}
-                onOpenOnline={returnToRoom}
-                onReturnLocal={back}
+                onOpenOnline={returnToLobby}
+                onReturnLobby={returnToLobby}
                 onApplyPosition={() => {}}
                 recordVisible={recordVisible}
                 onRecordVisibleChange={setRecordVisible}
@@ -804,6 +971,10 @@ function GameApp() {
                 rooms={rooms}
                 matchID={route}
                 onEnter={enter}
+                onReview={(record) => {
+                    setRecordVisible(true);
+                    setArchive(record);
+                }}
                 onFind={navigate}
                 onBack={back}
             />

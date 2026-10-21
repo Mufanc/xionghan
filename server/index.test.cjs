@@ -274,3 +274,266 @@ test(
         }
     },
 );
+
+test(
+    'lobby shows only online public waiting rooms and removes filled or disconnected rooms',
+    { timeout: 20000 },
+    async () => {
+        const dir = await mkdtemp(path.join(tmpdir(), 'xionghan-lobby-'));
+        let server;
+        const clients = [];
+
+        try {
+            server = await start(dir);
+            const list = async () => {
+                const response = await fetch(`${server.base}/games/XiongHan/waiting`, {
+                    headers: { Origin: 'http://127.0.0.1:5173' },
+                });
+                assert.equal(response.status, 200);
+                assert.equal(
+                    response.headers.get('access-control-allow-origin'),
+                    'http://127.0.0.1:5173',
+                );
+                assert.equal(response.headers.get('cache-control'), 'no-store');
+                return (await response.json()).rooms;
+            };
+            const create = async (unlisted) => {
+                const { matchID } = await (
+                    await post(server.base, '/create', { numPlayers: 2, unlisted })
+                ).json();
+                const seat = await (
+                    await post(server.base, `/${matchID}/join`, {
+                        playerName: '房主',
+                        playerID: '1',
+                    })
+                ).json();
+                return { matchID, seat };
+            };
+            const publicRoom = await create(false);
+            const privateRoom = await create(true);
+            assert.deepEqual(await list(), []);
+            for (const room of [publicRoom, privateRoom])
+                clients.push(connect(server.base, room.matchID, room.seat));
+            await waitFor(() =>
+                clients.every((client) => client.matchData?.some((player) => player.isConnected)),
+            );
+            let listed = await list();
+            assert.equal(listed.length, 1);
+            assert.deepEqual(Object.keys(listed[0]).sort(), [
+                'createdAt',
+                'host',
+                'matchID',
+                'side',
+            ]);
+            assert.equal(listed[0].matchID, publicRoom.matchID);
+            assert.equal(listed[0].side, '1');
+            assert.equal(JSON.stringify(listed).includes(publicRoom.seat.playerCredentials), false);
+            clients[0].stop();
+            await delay(150);
+            assert.deepEqual(await list(), []);
+            clients[0] = connect(server.base, publicRoom.matchID, publicRoom.seat);
+            await waitFor(() => clients[0].matchData?.some((player) => player.isConnected));
+            assert.equal((await list()).length, 1);
+            const contenders = await Promise.all([
+                post(server.base, `/${publicRoom.matchID}/join`, { playerName: '甲' }),
+                post(server.base, `/${publicRoom.matchID}/join`, { playerName: '乙' }),
+            ]);
+            assert.deepEqual(contenders.map((response) => response.status).sort(), [200, 409]);
+            assert.deepEqual(await list(), []);
+            const guest = await contenders.find((response) => response.status === 200).json();
+            clients.push(connect(server.base, publicRoom.matchID, guest));
+            await waitFor(() => clients[0].matchData?.every((player) => player.isConnected));
+            clients[2].moves.move(Board.indexOf(2, 8), Board.indexOf(2, 5));
+            await waitFor(() =>
+                [clients[0], clients[2]].every(
+                    (client) => client.getState()?.G.record?.moves.length === 1,
+                ),
+            );
+        } finally {
+            for (const client of clients) client.stop();
+            await server?.stop();
+            await rm(dir, { recursive: true, force: true });
+        }
+    },
+);
+
+test(
+    'anonymous identities privately own multiple rooms, survive restart and lose expired history',
+    { timeout: 20000 },
+    async () => {
+        const dir = await mkdtemp(path.join(tmpdir(), 'xionghan-identities-'));
+        let server;
+        try {
+            server = await start(dir);
+            const me = async (cookie = '') =>
+                fetch(`${server.base}/games/XiongHan/me`, { headers: { Cookie: cookie } });
+            const issue = async () => {
+                const response = await me();
+                const cookie = response.headers.get('set-cookie');
+                assert.match(cookie, /HttpOnly/);
+                assert.match(cookie, /SameSite=Lax/);
+                return cookie.split(';')[0];
+            };
+            const alice = await issue();
+            const bob = await issue();
+            assert.notEqual(alice, bob);
+            const api = (id, action, cookie) =>
+                fetch(`${server.base}/games/XiongHan/${id}/${action}`, {
+                    headers: { Cookie: cookie },
+                });
+            const join = (id, cookie) =>
+                fetch(`${server.base}/games/XiongHan/${id}/join`, {
+                    method: 'POST',
+                    headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ playerName: '棋友' }),
+                });
+            const create = async () =>
+                (
+                    await (
+                        await post(server.base, '/create', { numPlayers: 2, unlisted: true })
+                    ).json()
+                ).matchID;
+            const first = await create();
+            const second = await create();
+            const secureCookie = await fetch(`${server.base}/games/XiongHan/me`, {
+                headers: { 'X-Forwarded-Proto': 'https' },
+            });
+            assert.match(secureCookie.headers.get('set-cookie'), /; Secure/);
+            const seat = await (await join(first, alice)).json();
+            await join(second, alice);
+            const repeat = await (await join(first, alice)).json();
+            assert.deepEqual(repeat, seat);
+            assert.equal((await (await me(alice)).json()).matches.length, 2);
+            assert.deepEqual((await (await me(bob)).json()).matches, []);
+            assert.equal((await api(first, 'session', bob)).status, 403);
+            assert.equal((await api(first, 'record', bob)).status, 403);
+            assert.equal((await api(first, 'record', alice)).status, 409);
+            const recovered = await (await api(first, 'session', alice)).json();
+            assert.equal(recovered.credentials, seat.playerCredentials);
+            const publicData = await (await fetch(`${server.base}/games/XiongHan/${first}`)).text();
+            assert(
+                !publicData.includes('identity') && !publicData.includes(seat.playerCredentials),
+            );
+            assert.equal(
+                (
+                    await fetch(`${server.base}/games/XiongHan/me`, {
+                        headers: { Cookie: alice, Origin: 'https://evil.example' },
+                    })
+                ).status,
+                403,
+            );
+            assert.equal(
+                (
+                    await fetch(`${server.base}/games/XiongHan/me`, {
+                        headers: { Cookie: alice, Origin: 'null' },
+                    })
+                ).status,
+                403,
+            );
+            assert.equal(
+                (
+                    await fetch(`${server.base}/games/XiongHan/me`, {
+                        headers: { Cookie: alice, Origin: 'http://127.0.0.1:5173' },
+                    })
+                ).headers.get('access-control-allow-credentials'),
+                'true',
+            );
+            // 模拟已结束存档，验证读取权限和到期回收；走棋胜负本身由 core 测试覆盖。
+            await server.stop();
+            const finishAt = Date.now();
+            for (const file of await readdir(dir)) {
+                const filename = path.join(dir, file);
+                const entry = JSON.parse(await readFile(filename, 'utf8'));
+                if (entry.key === `${first}:metadata`) {
+                    entry.value.gameover = { winner: 'RED' };
+                    entry.value.roomFinishedAt = finishAt;
+                    await writeFile(filename, JSON.stringify(entry));
+                }
+            }
+            server = await start(dir);
+            const history = (await (await me(alice)).json()).matches;
+            assert.equal(history.length, 2);
+            assert.equal(
+                history.find((match) => match.matchID === first).expiresAt,
+                finishAt + 86400000,
+            );
+            assert(!JSON.stringify(history).includes(seat.playerCredentials));
+            assert.equal(
+                (await (await api(first, 'session', alice)).json()).credentials,
+                seat.playerCredentials,
+            );
+            const record = await (await api(first, 'record', alice)).json();
+            assert(record.game.board.length === 169);
+            assert(!JSON.stringify(record).includes(seat.playerCredentials));
+            await server.stop();
+            for (const file of await readdir(dir)) {
+                const filename = path.join(dir, file);
+                const entry = JSON.parse(await readFile(filename, 'utf8'));
+                if (entry.key === `${first}:metadata`) {
+                    entry.value.roomFinishedAt = Date.now() - 86400001;
+                    await writeFile(filename, JSON.stringify(entry));
+                }
+            }
+            server = await start(dir);
+            assert.equal((await api(first, 'record', alice)).status, 404);
+            assert.deepEqual(
+                (await (await me(alice)).json()).matches.map((match) => match.matchID),
+                [second],
+            );
+            assert.deepEqual((await (await me(await issue())).json()).matches, []);
+            for (const file of await readdir(dir)) {
+                const entry = JSON.parse(await readFile(path.join(dir, file), 'utf8'));
+                assert.notEqual(entry.key, `${first}:owners`);
+            }
+        } finally {
+            await server?.stop();
+            await rm(dir, { recursive: true, force: true });
+        }
+    },
+);
+
+test(
+    'binds an authenticated legacy seat without exposing or transferring existing ownership',
+    { timeout: 15000 },
+    async () => {
+        const dir = await mkdtemp(path.join(tmpdir(), 'xionghan-legacy-owner-'));
+        let server;
+        try {
+            server = await start(dir);
+            const { matchID } = await (
+                await post(server.base, '/create', { numPlayers: 2 })
+            ).json();
+            const seat = await (
+                await post(server.base, `/${matchID}/join`, { playerName: '旧玩家' })
+            ).json();
+            const cookie = async () =>
+                (await fetch(`${server.base}/games/XiongHan/me`)).headers
+                    .get('set-cookie')
+                    .split(';')[0];
+            const alice = await cookie();
+            const bob = await cookie();
+            const update = (owner, credentials) =>
+                fetch(`${server.base}/games/XiongHan/${matchID}/update`, {
+                    method: 'POST',
+                    headers: { Cookie: owner, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        playerID: seat.playerID,
+                        credentials,
+                        newName: '旧玩家',
+                    }),
+                });
+            assert.equal((await update(bob, 'forged')).status, 403);
+            assert.equal((await update(alice, seat.playerCredentials)).status, 200);
+            assert.equal((await update(bob, seat.playerCredentials)).status, 200);
+            const read = (owner) =>
+                fetch(`${server.base}/games/XiongHan/${matchID}/session`, {
+                    headers: { Cookie: owner },
+                });
+            assert.equal((await read(alice)).status, 200);
+            assert.equal((await read(bob)).status, 403);
+        } finally {
+            await server?.stop();
+            await rm(dir, { recursive: true, force: true });
+        }
+    },
+);

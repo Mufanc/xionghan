@@ -53,24 +53,18 @@ class RoomLimits {
     }
 
     expired(metadata) {
+        if (metadata.gameover) {
+            return this.now() - (metadata.roomFinishedAt ?? this.now()) >= 86400000;
+        }
+
         const players = Object.values(metadata.players);
         if (players.some((player) => player.isConnected)) return false;
 
         const joined = players.filter((player) => player.name).length;
         const offlineAt = metadata.roomOfflineAt ?? this.now();
         const since = Math.max(metadata.createdAt, offlineAt);
-        const ttl = metadata.gameover
-            ? 86400000
-            : joined === 0
-              ? 600000
-              : joined < 2
-                ? 900000
-                : 1800000;
-        const reference = metadata.gameover
-            ? Math.max(since, metadata.roomFinishedAt ?? since)
-            : joined === 0
-              ? metadata.createdAt
-              : since;
+        const ttl = joined === 0 ? 600000 : joined < 2 ? 900000 : 1800000;
+        const reference = joined === 0 ? metadata.createdAt : since;
 
         return this.now() - reference >= ttl;
     }

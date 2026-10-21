@@ -1,5 +1,5 @@
 .room-page {
-    width: min(100%, 720px);
+    width: min(100%, 1040px);
     margin: auto;
     padding: 28px 20px;
     color: #584a39;
@@ -120,4 +120,56 @@
     .room-card {
         padding: 20px;
     }
+}
+
+.room-lobby {
+    display: grid;
+    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+}
+.room-list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 0;
+    border-top: 1px solid #ded6c9;
+}
+.room-list-item > div {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+}
+.room-list-item strong {
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+.room-list-item span {
+    font-size: 12px;
+}
+.room-list-item button {
+    flex-shrink: 0;
+}
+@media (max-width: 720px) {
+    .room-lobby {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 20px;
+    }
+}
+
+.room-history {
+    margin-top: 24px;
+}
+.room-history h3 {
+    margin: 24px 0 12px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #817767;
+}
+.room-list-item .room-history-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    flex-shrink: 0;
 }

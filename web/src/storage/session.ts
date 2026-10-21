@@ -46,9 +46,9 @@ function isBoard(value: unknown, winner: Side | null = null): value is BoardData
     return true;
 }
 
-export function loadSession(): SavedSession | null {
+export function parseSession(text: string): SavedSession | null {
     try {
-        const saved = JSON.parse(localStorage.getItem(key) ?? 'null');
+        const saved = JSON.parse(text);
 
         if (
             !saved ||
@@ -139,6 +139,14 @@ export function loadSession(): SavedSession | null {
         if (record) delete record.initial.winner;
 
         return saved;
+    } catch {
+        return null;
+    }
+}
+
+export function loadSession(): SavedSession | null {
+    try {
+        return parseSession(localStorage.getItem(key) ?? 'null');
     } catch {
         return null;
     }

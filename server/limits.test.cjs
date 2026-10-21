@@ -28,7 +28,7 @@ test('rate limits create attempts and API requests independently and releases ex
     assert(limits.buckets.size <= 10000);
 });
 
-test('expires unused, waiting, disconnected and finished rooms at different deadlines, but skips online rooms', () => {
+test('expires unfinished rooms at different deadlines, but skips online rooms', () => {
     let now = 0;
     const limits = new RoomLimits({}, () => now);
     for (const [names, ttl] of [
@@ -50,13 +50,6 @@ test('expires unused, waiting, disconnected and finished rooms at different dead
         limits.annotate(room, room);
         if (names > 0) assert.equal(limits.expired(room), false);
     }
-    now = 0;
-    const ended = { ...metadata(2), gameover: { winner: 'RED' } };
-    limits.annotate(ended);
-    now = 86399999;
-    assert.equal(limits.expired(ended), false);
-    now++;
-    assert.equal(limits.expired(ended), true);
 });
 
 test('disconnect grace is not extended by offline metadata updates or restart', () => {
@@ -82,4 +75,29 @@ test('does not trust forged forwarded IPs from direct public connections', () =>
     assert.equal(clientIP(ctx('203.0.113.1', '1.2.3.4'), trusted), '203.0.113.1');
     assert.equal(clientIP(ctx('127.0.0.1', 'forged, 203.0.113.1'), trusted), '203.0.113.1');
     assert.equal(clientIP(ctx('127.0.0.1', 'invalid'), trusted), '127.0.0.1');
+});
+
+test('finished rooms expire 24 hours after completion regardless of connections or restart', () => {
+    let now = 1000;
+    const limits = new RoomLimits({}, () => now);
+    const room = { ...metadata(2), gameover: { winner: 'RED' } };
+    room.players[0].isConnected = true;
+    limits.annotate(room);
+    assert.equal(room.roomFinishedAt, 1000);
+    now += 3600000;
+    room.players[0].isConnected = false;
+    limits.annotate(room, room);
+    assert.equal(room.roomFinishedAt, 1000);
+    const restored = JSON.parse(JSON.stringify(room));
+    limits.annotate(restored);
+    now = 1000 + 86400000 - 1;
+    restored.players[0].isConnected = true;
+    limits.annotate(restored, restored);
+    assert.equal(limits.expired(restored), false);
+    now++;
+    assert.equal(limits.expired(restored), true);
+    restored.players[0].isConnected = false;
+    limits.annotate(restored, restored);
+    assert.equal(limits.expired(restored), true);
+    assert.equal(restored.roomFinishedAt, 1000);
 });

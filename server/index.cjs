@@ -2,6 +2,7 @@ const path = require('node:path');
 const { Server, FlatFile, SocketIO } = require('boardgame.io/server');
 const { gameConfig } = require('@xionghan/core/boardgame');
 const { RoomLimits, clientIP } = require('./limits.cjs');
+const { identity, ownedSeat } = require('./identity.cjs');
 
 const port = Number(process.env.PORT ?? 8000);
 const origins = (process.env.WEB_ORIGINS ?? 'http://127.0.0.1:5173,http://localhost:5173')
@@ -32,6 +33,7 @@ const trustedProxies = new Set(
 class RoomStore extends FlatFile {
     pending = new Set();
     metadata = new Map();
+    owners = new Map();
     creating = new Set();
     deleting = new Set();
     writes = new Map();
@@ -106,6 +108,8 @@ class RoomStore extends FlatFile {
         try {
             await Promise.all([...(this.writes.get(matchID) ?? [])]);
             await super.wipe(matchID);
+            await this.removeItem(`${matchID}:owners`);
+            this.owners.delete(matchID);
             this.metadata.delete(matchID);
             // bgio 0.50.2 的 FlatFile 不会释放已删除房间的内部请求队列。
             for (const key of [
@@ -113,6 +117,7 @@ class RoomStore extends FlatFile {
                 `${matchID}:initial`,
                 `${matchID}:metadata`,
                 `${matchID}:log`,
+                `${matchID}:owners`,
             ])
                 delete this.fileQueues[key];
         } finally {
@@ -156,6 +161,19 @@ class RoomStore extends FlatFile {
         return this.track(super.setMetadata(matchID, metadata), matchID);
     }
 
+    async bindOwner(matchID, player, owner) {
+        if (this.deleting.has(matchID) || !this.metadata.has(matchID)) return;
+
+        const owners = this.owners.get(matchID) ?? {};
+        const existing = owners[player.id];
+
+        if (existing?.credentials === player.credentials && existing.identity !== owner) return;
+
+        owners[player.id] = { identity: owner, credentials: player.credentials };
+        this.owners.set(matchID, owners);
+        await this.track(this.setItem(`${matchID}:owners`, owners), matchID);
+    }
+
     async flush() {
         while (this.pending.size) await Promise.all([...this.pending]);
     }
@@ -172,6 +190,7 @@ class RoomStore extends FlatFile {
                 player.isConnected = false;
             }
 
+            this.owners.set(matchID, (await this.getItem(`${matchID}:owners`)) ?? {});
             resets.push(this.setMetadata(matchID, metadata));
         }
 
@@ -285,6 +304,113 @@ server.app.use(async (ctx, next) => {
         }
     }
 
+    if (ctx.path.startsWith('/games/XiongHan')) {
+        const origin = ctx.get('origin');
+        const sameOrigin = origin === `http://${ctx.host}` || origin === `https://${ctx.host}`;
+
+        if (origin && !sameOrigin && !origins.includes(origin))
+            ctx.throw(403, 'Origin not allowed');
+
+        if (origin) {
+            ctx.set('Access-Control-Allow-Origin', origin);
+            ctx.set('Access-Control-Allow-Credentials', 'true');
+            ctx.vary('Origin');
+        }
+
+        ctx.set('Cache-Control', 'no-store');
+    }
+
+    if (ctx.method === 'GET' && ctx.path === '/games/XiongHan/me') {
+        const owner = identity(ctx, trustedProxies, true);
+        const matches = [];
+
+        for (const [matchID, metadata] of db.metadata) {
+            const player = ownedSeat(db, matchID, owner);
+            if (!player || limits.expired(metadata)) continue;
+
+            matches.push({
+                matchID,
+                playerID: String(player.id),
+                players: Object.values(metadata.players).map(({ id, name }) => ({ id, name })),
+                gameover: metadata.gameover ?? null,
+                updatedAt: metadata.updatedAt,
+                expiresAt: metadata.gameover ? metadata.roomFinishedAt + 86400000 : null,
+            });
+        }
+
+        ctx.body = { matches: matches.sort((a, b) => b.updatedAt - a.updatedAt) };
+
+        return;
+    }
+
+    const personal = /^\/games\/XiongHan\/([\w-]{1,128})\/(session|record)$/.exec(ctx.path);
+
+    if (ctx.method === 'GET' && personal) {
+        const [, matchID, action] = personal;
+        const metadata = db.metadata.get(matchID);
+        const player = ownedSeat(db, matchID, identity(ctx, trustedProxies));
+
+        if (!metadata || limits.expired(metadata)) ctx.throw(404);
+        if (!player) ctx.throw(403);
+
+        if (action === 'session') {
+            ctx.body = {
+                matchID,
+                playerID: String(player.id),
+                credentials: player.credentials,
+                playerName: player.name,
+            };
+        } else {
+            if (!metadata.gameover) ctx.throw(409, 'Match is still active');
+
+            const { state } = await db.fetch(matchID, { state: true });
+            if (!state) ctx.throw(404);
+            ctx.body = { game: state.G, currentPlayer: state.ctx.currentPlayer };
+        }
+
+        return;
+    }
+
+    if (ctx.method === 'GET' && ctx.path === '/games/XiongHan/waiting') {
+        const origin = ctx.get('origin');
+
+        if (origins.includes(origin)) {
+            ctx.set('Access-Control-Allow-Origin', origin);
+            ctx.vary('Origin');
+        }
+
+        ctx.set('Cache-Control', 'no-store');
+        ctx.body = {
+            rooms: [...db.metadata.entries()]
+                .flatMap(([matchID, metadata]) => {
+                    const players = Object.values(metadata.players);
+                    const seated = players.filter((player) => !!player.name);
+
+                    if (
+                        db.deleting.has(matchID) ||
+                        metadata.unlisted ||
+                        metadata.gameover ||
+                        seated.length !== 1 ||
+                        !seated[0].isConnected
+                    )
+                        return [];
+
+                    // 只投影大厅需要的字段，不暴露凭据或读取完整棋谱。
+                    return [
+                        {
+                            matchID,
+                            host: seated[0].name,
+                            side: String(seated[0].id),
+                            createdAt: metadata.createdAt,
+                        },
+                    ];
+                })
+                .sort((a, b) => b.createdAt - a.createdAt),
+        };
+
+        return;
+    }
+
     const match = /^\/games\/XiongHan\/([\w-]+)\/(join|leave|update|rename|playAgain)$/.exec(
         ctx.path,
     );
@@ -302,7 +428,22 @@ server.app.use(async (ctx, next) => {
     await previous;
 
     try {
+        const owner = identity(ctx, trustedProxies);
+        const existing = ownedSeat(db, key, owner);
+
+        if (match[2] === 'join' && existing) {
+            ctx.body = { playerID: String(existing.id), playerCredentials: existing.credentials };
+            return;
+        }
+
         await next();
+
+        if (owner && ctx.status === 200 && ['join', 'update'].includes(match[2])) {
+            const playerID = match[2] === 'join' ? ctx.body.playerID : ctx.request.body.playerID;
+            const player = db.metadata.get(key)?.players[playerID];
+
+            if (player?.credentials) await db.bindOwner(key, player, owner);
+        }
     } finally {
         release();
         if (requests.get(key) === current) requests.delete(key);

@@ -6,6 +6,7 @@ const values = new Map<string, string>();
 const local = '{"keep":"local game"}';
 
 beforeEach(() => {
+    vi.spyOn(Rooms.prototype, 'ensureIdentity').mockResolvedValue(undefined);
     values.clear();
     values.set('xionghan.session', local);
     vi.stubGlobal('localStorage', {
@@ -14,7 +15,10 @@ beforeEach(() => {
         removeItem: (key: string) => values.delete(key),
     });
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+});
 
 describe('online rooms', () => {
     it('accepts IDs and invitations, and never includes seat credentials in links', () => {
@@ -50,7 +54,7 @@ describe('online rooms', () => {
         expect(values.get('xionghan.session')).toBe(local);
     });
 
-    it('creates an unlisted two-player room, selects a seat and authenticates resume', async () => {
+    it('creates a public two-player room, selects a seat and authenticates resume', async () => {
         const rooms = new Rooms('https://game.example');
         const create = vi.spyOn(rooms.lobby, 'createMatch').mockResolvedValue({ matchID: 'abc' });
         const join = vi
@@ -58,7 +62,7 @@ describe('online rooms', () => {
             .mockResolvedValue({ playerID: '1', playerCredentials: 'secret' });
         const update = vi.spyOn(rooms.lobby, 'updatePlayer').mockResolvedValue(undefined);
         const session = await rooms.create('棋友', '1');
-        expect(create.mock.calls[0][1]).toEqual({ numPlayers: 2, unlisted: true });
+        expect(create.mock.calls[0][1]).toEqual({ numPlayers: 2, unlisted: false });
         expect(join.mock.calls[0][2]).toEqual({ playerName: '棋友', playerID: '1' });
         await rooms.resume(session);
         expect(update.mock.calls[0][2]).toEqual({
@@ -68,7 +72,34 @@ describe('online rooms', () => {
         });
     });
 
-    it('releases a new seat when browser storage fails', async () => {
+    it('keeps invitation-only rooms private when requested', async () => {
+        const rooms = new Rooms('https://game.example');
+        const create = vi.spyOn(rooms.lobby, 'createMatch').mockResolvedValue({ matchID: 'abc' });
+        vi.spyOn(rooms.lobby, 'joinMatch').mockResolvedValue({
+            playerID: '0',
+            playerCredentials: 'secret',
+        });
+        await rooms.create('棋友', '0', true);
+        expect(create.mock.calls[0][1]).toEqual({ numPlayers: 2, unlisted: true });
+    });
+
+    it('loads waiting rooms with cancellation and reports rate limits', async () => {
+        const rooms = new Rooms('https://game.example');
+        const list = [{ matchID: 'abc', host: '棋友', side: '0', createdAt: 1 }];
+        const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ rooms: list })));
+        vi.stubGlobal('fetch', fetcher);
+        const controller = new AbortController();
+        expect(await rooms.waiting(controller.signal)).toEqual(list);
+        expect(fetcher.mock.calls[0][0]).toBe('https://game.example/games/XiongHan/waiting');
+        controller.abort();
+        expect(fetcher.mock.calls[0][1].signal.aborted).toBe(true);
+        fetcher.mockResolvedValue(new Response('{}', { status: 429 }));
+        await expect(rooms.waiting(new AbortController().signal)).rejects.toThrow(
+            'HTTP status 429',
+        );
+    });
+
+    it('keeps an identity-backed seat when browser storage fails', async () => {
         const rooms = new Rooms('https://game.example');
         vi.spyOn(rooms.lobby, 'joinMatch').mockResolvedValue({
             playerID: '0',
@@ -80,8 +111,8 @@ describe('online rooms', () => {
                 throw new Error('denied');
             },
         });
-        await expect(rooms.join('abc', '棋友')).rejects.toThrow('无法保存座位');
-        expect(leave.mock.calls[0][2]).toEqual({ playerID: '0', credentials: 'secret' });
+        expect((await rooms.join('abc', '棋友')).credentials).toBe('secret');
+        expect(leave).not.toHaveBeenCalled();
     });
 
     it('rejects invalid names before contacting the server and ignores corrupted saved credentials', async () => {
@@ -124,4 +155,55 @@ describe('online rooms', () => {
         expect(rooms.read('abc')).toBeNull();
         expect(rooms.latest()).toBeNull();
     });
+});
+
+it('initializes one cookie identity for concurrent requests and retries after failure', async () => {
+    vi.mocked(Rooms.prototype.ensureIdentity).mockRestore();
+    const rooms = new Rooms('https://game.example');
+    const request = vi.fn().mockResolvedValue(new Response('{"matches":[]}'));
+    vi.stubGlobal('fetch', request);
+    await Promise.all([rooms.ensureIdentity(), rooms.ensureIdentity()]);
+    expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0][1].credentials).toBe('include');
+    const other = new Rooms('https://game.example');
+    request.mockRejectedValueOnce(new TypeError('offline'));
+    await expect(other.ensureIdentity()).rejects.toThrow('offline');
+    request.mockResolvedValue(new Response('{"matches":[]}'));
+    await other.ensureIdentity();
+    expect(request).toHaveBeenCalledTimes(3);
+});
+
+it('recovers with the cookie when no local seat is stored and distinguishes denial from network errors', async () => {
+    const rooms = new Rooms('https://game.example');
+    const session = { matchID: 'abc', playerID: '0', credentials: 'secret', playerName: '棋友' };
+    const request = vi.fn().mockResolvedValue(new Response(JSON.stringify(session)));
+    vi.stubGlobal('fetch', request);
+    expect(rooms.read('abc')).toBeNull();
+    expect(await rooms.recover('abc')).toEqual(session);
+    expect(request.mock.calls[0][0]).toBe('https://game.example/games/XiongHan/abc/session');
+    expect(request.mock.calls[0][1].credentials).toBe('include');
+    request.mockResolvedValueOnce(new Response('{}', { status: 403 }));
+    expect(await rooms.recover('abc')).toBeNull();
+    request.mockRejectedValueOnce(new TypeError('offline'));
+    await expect(rooms.recover('abc')).rejects.toThrow('offline');
+});
+
+it('migrates the legacy recent seat before requesting server history, only once', async () => {
+    const rooms = new Rooms('https://game.example');
+    const session = {
+        matchID: 'old',
+        playerID: '1' as const,
+        credentials: 'secret',
+        playerName: '棋友',
+    };
+    vi.spyOn(rooms, 'latest').mockReturnValue(session);
+    const resume = vi.spyOn(rooms, 'resume').mockResolvedValue(session);
+    const request = vi
+        .fn()
+        .mockImplementation(() => Promise.resolve(new Response('{"matches":[]}')));
+    vi.stubGlobal('fetch', request);
+    await rooms.mine(new AbortController().signal);
+    await rooms.mine(new AbortController().signal);
+    expect(resume).toHaveBeenCalledExactlyOnceWith(session);
+    expect(request).toHaveBeenCalledTimes(2);
 });

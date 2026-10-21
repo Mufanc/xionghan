@@ -6,7 +6,7 @@
     "scripts": {
         "dev": "node --watch index.cjs",
         "start": "node index.cjs",
-        "build": "node --check index.cjs && node --check limits.cjs",
+        "build": "node --check index.cjs && node --check limits.cjs && node --check identity.cjs",
         "test": "node --test *.test.cjs"
     },
     "dependencies": {
