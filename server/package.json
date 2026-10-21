@@ -1,0 +1,18 @@
+{
+    "name": "xionghan-peer-server",
+    "private": true,
+    "version": "0.1.0",
+    "type": "module",
+    "engines": {
+        "node": ">=22"
+    },
+    "packageManager": "pnpm@12.14.0",
+    "scripts": {
+        "start": "node node_modules/peer/dist/bin/peerjs.js --host 0.0.0.0 --port 9000 --path /peerjs --proxied --concurrent_limit 100",
+        "test": "node --test smoke.js",
+        "package": "mkdir -p dist && rm -f dist/peer-server.zip && zip -qr dist/peer-server.zip package.json node_modules"
+    },
+    "dependencies": {
+        "peer": "1.0.2"
+    }
+}
