@@ -17,14 +17,9 @@ const stars = [
     [12, 12],
 ];
 
-export function BoardArt({ flipped = false }: { flipped?: boolean }) {
+export function BoardArt() {
     return (
-        <svg
-            className="board-art"
-            viewBox="0 0 1300 1300"
-            aria-hidden="true"
-            style={{ rotate: flipped ? '180deg' : undefined }}
-        >
+        <svg className="board-art" viewBox="0 0 1300 1300" aria-hidden="true">
             <rect width="1300" height="1300" fill="bisque" />
             <g stroke="#35352f" fill="none">
                 <rect x="30" y="30" width="1240" height="1240" strokeWidth="10" />
@@ -91,7 +86,6 @@ export function BoardArt({ flipped = false }: { flipped?: boolean }) {
                         />
                         <text
                             x={x}
-                            transform={flipped ? `rotate(180 ${x} 650)` : undefined}
                             y="651"
                             fontSize="18"
                             fontWeight="700"

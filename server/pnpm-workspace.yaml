@@ -1,2 +1,0 @@
-# 平铺依赖，部署包解压后可直接由 Node.js 运行。
-nodeLinker: hoisted

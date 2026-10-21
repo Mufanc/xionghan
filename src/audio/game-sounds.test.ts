@@ -31,18 +31,6 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('presentation-layer game sounds', () => {
-    it('uses the black player perspective for online self and opponent sounds', () => {
-        let state = Game.initialState();
-        const sounds = new GameSounds(state, Side.Black);
-        sounds.setEnabled(true);
-        state = moved(state, Board.indexOf(2, 8), Board.indexOf(2, 5));
-        sounds.update(state, false);
-        expect(instances.at(-1)!.src).toMatch(/move-opponent\.ogg$/);
-        state = moved(state, Board.indexOf(2, 4), Board.indexOf(2, 5));
-        sounds.update(state, false);
-        expect(instances.at(-1)!.src).toMatch(/capture-self\.ogg$/);
-    });
-
     it('starts silent and does not replay moves when enabled or rerendered', () => {
         const initial = Game.initialState();
         const sounds = new GameSounds(initial);

@@ -20,10 +20,7 @@ export class GameSounds {
     private enabled = false;
     private current: HTMLAudioElement | null = null;
 
-    constructor(
-        private previous: GameState,
-        private readonly perspective = Side.Red,
-    ) {}
+    constructor(private previous: GameState) {}
 
     setEnabled(enabled: boolean): void {
         this.enabled = enabled;
@@ -53,7 +50,7 @@ export class GameSounds {
         if (!this.enabled || state.lastMove === before.lastMove) return;
 
         const { to } = state.lastMove;
-        const side = state.board[to]!.side === this.perspective ? Side.Red : Side.Black;
+        const side = state.board[to]!.side;
 
         if (winner) {
             this.play(win);

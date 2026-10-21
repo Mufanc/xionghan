@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { GameSounds } from '@/audio/game-sounds';
-import { Side } from '@/core/piece';
+import type { Side } from '@/core/piece';
 import type { GameState } from '@/core/game';
 
 export function useGameSounds(
@@ -8,9 +8,8 @@ export function useGameSounds(
     isCheck: boolean,
     enabled: boolean,
     winner: Side | null,
-    perspective = Side.Red,
 ) {
-    const [sounds] = useState(() => new GameSounds(state, perspective));
+    const [sounds] = useState(() => new GameSounds(state));
 
     useEffect(() => {
         sounds.setEnabled(enabled);
