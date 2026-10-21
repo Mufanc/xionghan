@@ -50,7 +50,7 @@ export class Rooms {
     readonly server: string;
     readonly lobby: LobbyClient;
 
-    constructor(server = import.meta.env.VITE_SERVER_URL || location.origin) {
+    constructor(server = import.meta.env.VITE_API_SERVER_URL || location.origin) {
         this.server = server.replace(/\/$/, '');
         this.lobby = new LobbyClient({ server: this.server });
     }

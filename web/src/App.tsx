@@ -127,7 +127,7 @@ function GameBoard({
         reviewing ? reviewStep! : totalSteps,
         volume,
         online && isConnected && opponent?.isConnected && totalSteps === 0
-            ? `${import.meta.env.VITE_SERVER_URL || location.origin}:${online.matchID}:${online.playerID}`
+            ? `${import.meta.env.VITE_API_SERVER_URL || location.origin}:${online.matchID}:${online.playerID}`
             : playStart
               ? 'local'
               : undefined,
