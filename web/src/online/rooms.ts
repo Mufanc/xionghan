@@ -32,6 +32,8 @@ export function roomError(error: unknown): string {
     if (error instanceof LobbyClientError) {
         const status = Number(error.message.match(/HTTP status (\d+)/)?.[1]);
 
+        if (status === 429) return '操作太频繁，请稍后再试。';
+        if (status === 503) return '服务器房间已满，请稍后再试。';
         if (status === 404) return '房间不存在或已关闭。';
         if (status === 409) return '这个位置已有人加入，请重新查看房间。';
         if (status === 403) return '无法恢复这个座位，请重新加入。';

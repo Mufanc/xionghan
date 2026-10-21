@@ -102,6 +102,8 @@ describe('online rooms', () => {
         );
         expect(roomError(new LobbyClientError('HTTP status 409', {}))).toContain('已有人');
         expect(roomError(new LobbyClientError('HTTP status 404', {}))).toContain('不存在');
+        expect(roomError(new LobbyClientError('HTTP status 429', {}))).toContain('太频繁');
+        expect(roomError(new LobbyClientError('HTTP status 503', {}))).toContain('已满');
         expect(roomError(new TypeError('Failed to fetch'))).toContain('服务端');
     });
     it('keeps credentials after a transient resume failure and removes them only if rejected', async () => {

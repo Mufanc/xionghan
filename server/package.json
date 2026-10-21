@@ -6,8 +6,8 @@
     "scripts": {
         "dev": "node --watch index.cjs",
         "start": "node index.cjs",
-        "build": "node --check index.cjs",
-        "test": "node --test index.test.cjs"
+        "build": "node --check index.cjs && node --check limits.cjs",
+        "test": "node --test *.test.cjs"
     },
     "dependencies": {
         "@xionghan/core": "workspace:*",
