@@ -758,3 +758,11 @@ i {
     width: 295px;
     font-size: 11px;
 }
+
+.rules-link {
+    text-decoration: none;
+}
+.rules-link:focus-visible {
+    outline: 2px solid #917756;
+    outline-offset: 2px;
+}

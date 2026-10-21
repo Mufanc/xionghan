@@ -31,7 +31,7 @@ export default defineConfig({
                 ],
             },
             workbox: {
-                globPatterns: ['**/*.{html,js,css,png,ttf,ogg}'],
+                globPatterns: ['**/*.{html,js,css,png,svg,ttf,ogg}'],
                 // 等旧页面全部关闭后更新，避免中断尚未保存的对局。
                 skipWaiting: false,
                 clientsClaim: false,

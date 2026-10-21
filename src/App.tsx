@@ -286,6 +286,15 @@ function GameBoard({
                     </h1>
                 </div>
                 <div className="view-controls">
+                    <a
+                        className="ui-button quiet rules-link"
+                        href="?page=rules"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="规则（新标签页）"
+                    >
+                        规则
+                    </a>
                     <button
                         className="ui-button quiet"
                         role="switch"
