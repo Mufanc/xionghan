@@ -8,6 +8,7 @@ import { useMoveAnimation, type MoveAnimationState } from '@/hooks/use-move-anim
 
 interface BoardViewProps {
     board: BoardData;
+    flipped?: boolean;
     selected: Index | null;
     selectionStyle: 'ring' | 'frame';
     destinations: Index[];
@@ -27,6 +28,7 @@ interface BoardViewProps {
 
 export function BoardView({
     board,
+    flipped = false,
     selected,
     selectionStyle,
     destinations,
@@ -43,16 +45,20 @@ export function BoardView({
     onCancel,
     children,
 }: BoardViewProps) {
-    const [cursor, setCursor] = useState<Index>(149);
+    const [cursor, setCursor] = useState<Index>(flipped ? 19 : 149);
     const { boardRef, captured, clearCapture } = useMoveAnimation(
         animationState,
         animateMoves,
         animationStep,
     );
+    const bottomSide = flipped ? Side.Black : Side.Red;
+    const topSide = Side.opposite(bottomSide);
+    const royalNames = (side: Side) => (side === Side.Red ? '皇 · 仕 · 相' : '單 · 氏 · 都');
     const sideName = (side: Side) => (side === Side.Red ? '红方' : '黑方');
 
     function navigate(event: KeyboardEvent<HTMLButtonElement>, index: Index) {
-        const { x, y } = Board.coordinatesOf(index);
+        const visualIndex = flipped ? Board.SIZE ** 2 - 1 - index : index;
+        const { x, y } = Board.coordinatesOf(visualIndex);
 
         const offsets: Record<string, number> = {
             ArrowLeft: x > 0 ? -1 : 0,
@@ -69,7 +75,8 @@ export function BoardView({
 
         event.preventDefault();
 
-        const next = index + offsets[event.key];
+        const visualNext = visualIndex + offsets[event.key];
+        const next = flipped ? Board.SIZE ** 2 - 1 - visualNext : visualNext;
 
         setCursor(next);
         boardRef.current?.querySelector<HTMLElement>(`#point-${next}`)?.focus();
@@ -78,11 +85,11 @@ export function BoardView({
     return (
         <section className="play-area" aria-label="匈汉象棋对局">
             <div className="player-bar">
-                <span className={`player ${Side.Black}`}>
+                <span className={`player ${topSide}`}>
                     <i />
-                    黑方
+                    {sideName(topSide)}
                 </span>
-                <span>單 · 氏 · 都</span>
+                <span>{royalNames(topSide)}</span>
             </div>
             <div
                 ref={boardRef}
@@ -90,7 +97,7 @@ export function BoardView({
                 role="group"
                 aria-label="13乘13棋盘，方向键移动焦点，回车选子或落子，Escape取消选择"
             >
-                <BoardArt />
+                <BoardArt flipped={flipped} />
                 {board.map((occupant, index) => {
                     const { x, y } = Board.coordinatesOf(index);
                     const possible = destinations.includes(index);
@@ -107,6 +114,10 @@ export function BoardView({
                         <button
                             key={index}
                             id={`point-${index}`}
+                            style={{
+                                gridColumn: (flipped ? Board.SIZE - 1 - x : x) + 1,
+                                gridRow: (flipped ? Board.SIZE - 1 - y : y) + 1,
+                            }}
                             className={`point${active && selectionStyle === 'ring' ? ' selected' : ''}${possible ? ' possible' : ''}${isKingInCheck ? ' checked' : ''}${isDefeatedKing ? ' defeated' : ''}${blocked ? ' unavailable' : ''}`}
                             tabIndex={cursor === index ? 0 : -1}
                             aria-label={`${label}${possible ? '，可落子' : ''}${forbidden ? '，禁着：会使己方王受攻击或两王照面' : ''}${lastFrom ? '，上一步起点' : ''}${lastTo ? '，上一步落点' : ''}`}
@@ -145,11 +156,11 @@ export function BoardView({
                 {children}
             </div>
             <div className="player-bar">
-                <span className={`player ${Side.Red}`}>
+                <span className={`player ${bottomSide}`}>
                     <i />
-                    红方
+                    {sideName(bottomSide)}
                 </span>
-                <span>皇 · 仕 · 相</span>
+                <span>{royalNames(bottomSide)}</span>
             </div>
         </section>
     );

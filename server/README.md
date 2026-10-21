@@ -40,11 +40,11 @@ pnpm --dir server package
 
 部署后访问 `https://你的函数域名/peerjs` 应返回服务信息，`/peerjs/peerjs/id` 应返回新 Peer ID。
 
-前端后续接入 PeerJS 时使用：
+当前前端 PeerJS 使用：
 
 ```js
 new Peer({
-    host: '你的函数域名',
+    host: 'xionghan-peer-xviexerlgo.cn-hangzhou.fcapp.run',
     port: 443,
     path: '/peerjs',
     secure: true,

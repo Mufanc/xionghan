@@ -33,6 +33,22 @@ describe('BoardView without a game client', () => {
         expect(html).toContain('position-mark');
     });
 
+    it('puts black at the bottom while retaining logical coordinates and markers', () => {
+        const normal = renderToStaticMarkup(<BoardView {...props} />);
+        const flipped = renderToStaticMarkup(<BoardView {...props} flipped />);
+        expect(normal).toContain('id="point-19" style="grid-column:7;grid-row:2"');
+        expect(flipped).toContain('id="point-19" style="grid-column:7;grid-row:12"');
+        expect(flipped).toContain('id="point-149" style="grid-column:7;grid-row:2"');
+        expect(flipped).toContain('id="point-0" style="grid-column:13;grid-row:13"');
+        expect(flipped).toContain('id="point-168" style="grid-column:1;grid-row:1"');
+        expect(flipped).toContain('A1 黑方鋒');
+        expect(flipped.indexOf('player RED')).toBeLessThan(flipped.indexOf('player BLACK'));
+        expect(flipped).toContain('rotate:180deg');
+        expect(flipped.match(/transform="rotate\(180 /g)).toHaveLength(13);
+        expect(flipped).toContain('last-from-mark');
+        expect(flipped).toContain('forbidden-mark');
+    });
+
     it('supports setup framing, overlays and read-only display through props', () => {
         const html = renderToStaticMarkup(
             <BoardView {...props} selectionStyle="frame" disabled>

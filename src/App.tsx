@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { Client, type BoardProps } from 'boardgame.io/react';
 import { BoardView } from '@/components/BoardView';
@@ -11,7 +11,9 @@ import { Board, type BoardData, type Index } from '@/core/board';
 import { Side, Kind, Piece } from '@/core/piece';
 import { Game, type GameState } from '@/core/game';
 import { useGameSounds } from '@/hooks/use-game-sounds';
-import { loadSession, saveSession } from '@/storage/session';
+import { loadSession, saveSession, type SavedSession } from '@/storage/session';
+import { PeerRoom, parseRoom } from '@/network/peer-room';
+import { OnlineLobby } from '@/components/OnlineLobby';
 
 const hints: Record<Kind, string> = {
     [Kind.King]: '宫内直走一格；两王不可照面。',
@@ -26,7 +28,9 @@ const hints: Record<Kind, string> = {
     [Kind.Catapult]: '沿直线或斜线行走；只能吃周围一格内、未被邻子保护的棋子。',
 };
 
-interface GameBoardProps extends BoardProps<GameState> {
+interface GameBoardProps extends Pick<BoardProps<GameState>, 'G' | 'ctx' | 'moves'> {
+    onOnline?: (session: SavedSession) => void;
+    online?: { player: '0' | '1'; ready: boolean; controls: ReactNode };
     initialDraft: BoardData | null;
     recordVisible: boolean;
     onRecordVisibleChange: (visible: boolean) => void;
@@ -45,6 +49,8 @@ function GameBoard({
     onRecordVisibleChange,
     soundEnabled,
     onSoundEnabledChange,
+    onOnline,
+    online,
 }: GameBoardProps) {
     const [selected, setSelected] = useState<Index | null>(null);
     const [confirmReset, setConfirmReset] = useState(false);
@@ -52,6 +58,7 @@ function GameBoard({
     const [picker, setPicker] = useState<Index | null>(null);
     const [reviewStep, setReviewStep] = useState<number | null>(null);
     const [fullscreen, setFullscreen] = useState(!!document.fullscreenElement);
+    const canPlay = !online || (online.ready && ctx.currentPlayer === online.player);
     const winner: Side | null = ctx.gameover?.winner ?? null;
     const totalSteps = G.record?.moves.length ?? 0;
     const reviewing = reviewStep !== null && reviewStep < totalSteps;
@@ -82,6 +89,7 @@ function GameBoard({
         !winner && new Game(G).isCheck(playerSide(ctx.currentPlayer)),
         soundEnabled && !editor && !reviewing,
         winner,
+        online ? playerSide(online.player) : Side.Red,
     );
     const sideName = (value: string) => (value === Side.Red ? '红方' : '黑方');
     const status = editor
@@ -126,6 +134,8 @@ function GameBoard({
     }
 
     useEffect(() => {
+        if (online) return;
+
         saveSession({
             version: 1,
             game: G,
@@ -134,7 +144,7 @@ function GameBoard({
             soundEnabled,
             recordVisible,
         });
-    }, [G, ctx.currentPlayer, draft, soundEnabled, recordVisible]);
+    }, [G, ctx.currentPlayer, draft, soundEnabled, recordVisible, online]);
 
     useEffect(() => {
         if (picker === null) return;
@@ -234,7 +244,7 @@ function GameBoard({
             return;
         }
 
-        if (reviewing || winner || unavailablePieces.includes(index)) return;
+        if (!canPlay || reviewing || winner || unavailablePieces.includes(index)) return;
 
         if (index === selected) {
             setSelected(null);
@@ -272,7 +282,7 @@ function GameBoard({
                         弈
                     </span>
                     <h1>
-                        匈汉象棋<small>十三路 · 同屏对弈</small>
+                        匈汉象棋<small>十三路 · {online ? '联机对弈' : '同屏对弈'}</small>
                     </h1>
                 </div>
                 <div className="view-controls">
@@ -319,13 +329,15 @@ function GameBoard({
             <nav className="game-toolbar" aria-label={editor ? '摆子操作' : '对局操作'}>
                 <button
                     className="ui-button"
-                    disabled={!editor && reviewing}
+                    disabled={!!online || (!editor && reviewing)}
                     onClick={() => transitionLayout(editor ? cancelEdit : beginEdit)}
                 >
                     {editor ? '取消摆子' : '摆子'}
                 </button>
                 <div className="game-actions">
-                    {editor ? (
+                    {online ? (
+                        online.controls
+                    ) : editor ? (
                         <>
                             <button
                                 className="ui-button quiet"
@@ -355,6 +367,21 @@ function GameBoard({
                         </>
                     ) : (
                         <>
+                            <button
+                                className="ui-button"
+                                onClick={() =>
+                                    onOnline?.({
+                                        version: 1,
+                                        game: G,
+                                        currentPlayer: ctx.currentPlayer === '0' ? '0' : '1',
+                                        draft,
+                                        soundEnabled,
+                                        recordVisible,
+                                    })
+                                }
+                            >
+                                联机
+                            </button>
                             {confirmReset && (
                                 <button
                                     className="ui-button quiet"
@@ -374,6 +401,7 @@ function GameBoard({
                 </div>
             </nav>
             <BoardView
+                flipped={online?.player === '1'}
                 board={board}
                 selected={editor ? (selected ?? picker) : selected}
                 selectionStyle={editor ? 'frame' : 'ring'}
@@ -395,7 +423,7 @@ function GameBoard({
                           )
                         : -1
                 }
-                disabled={!editor && (reviewing || !!winner)}
+                disabled={!editor && (!canPlay || reviewing || !!winner)}
                 animationState={displayed}
                 animationStep={reviewing ? reviewStep! : totalSteps}
                 animateMoves={!editor}
@@ -417,7 +445,9 @@ function GameBoard({
                 {!editor && !reviewing && (
                     <p aria-live="polite">
                         {winner
-                            ? '对局结束，点击「新局」再来一盘。'
+                            ? online
+                                ? '对局结束。'
+                                : '对局结束，点击「新局」再来一盘。'
                             : piece
                               ? `${Piece.nameOf(piece.side, piece.kind)} · ${hints[piece.kind]}${forbiddenDestinations.length ? ' 红点为禁着：会使己方王受攻击或两王照面。' : ''}`
                               : '点选己方棋子，再点选落点。红方先行。'}
@@ -440,13 +470,19 @@ function GameBoard({
 }
 
 export default function App() {
-    const [saved] = useState(loadSession);
+    const [saved, setSaved] = useState(loadSession);
+    const localSession = useRef(saved);
+    const [online, setOnline] = useState<{ target: string | null } | null>(() => {
+        const target = parseRoom(location.href);
+        return target ? { target } : null;
+    });
+    const [lobby, setLobby] = useState(false);
     const [position, setPosition] = useState<BoardData | null>(null);
     const [soundEnabled, setSoundEnabled] = useState(saved?.soundEnabled ?? true);
     const [recordVisible, setRecordVisible] = useState(saved?.recordVisible ?? true);
     const GameClient = useMemo(
         () =>
-            Client<GameState, GameBoardProps>({
+            Client<GameState, GameBoardProps & BoardProps<GameState>>({
                 game: position
                     ? gameFromPosition(position)
                     : saved
@@ -460,13 +496,149 @@ export default function App() {
     );
 
     return (
-        <GameClient
-            initialDraft={position ? null : (saved?.draft ?? null)}
-            recordVisible={recordVisible}
-            onRecordVisibleChange={setRecordVisible}
-            onApplyPosition={setPosition}
-            soundEnabled={soundEnabled}
-            onSoundEnabledChange={setSoundEnabled}
-        />
+        <>
+            {!online && (
+                <GameClient
+                    onOnline={(session) => {
+                        localSession.current = session;
+                        setLobby(true);
+                    }}
+                    initialDraft={position ? null : (saved?.draft ?? null)}
+                    recordVisible={recordVisible}
+                    onRecordVisibleChange={setRecordVisible}
+                    onApplyPosition={setPosition}
+                    soundEnabled={soundEnabled}
+                    onSoundEnabledChange={setSoundEnabled}
+                />
+            )}
+            {lobby && (
+                <OnlineLobby
+                    onClose={() => setLobby(false)}
+                    onStart={(target) => {
+                        setLobby(false);
+                        setOnline({ target });
+                    }}
+                />
+            )}
+            {online && (
+                <OnlineBoard
+                    target={online.target}
+                    soundEnabled={soundEnabled}
+                    onSoundEnabledChange={setSoundEnabled}
+                    recordVisible={recordVisible}
+                    onRecordVisibleChange={setRecordVisible}
+                    onLeave={() => {
+                        setSaved(localSession.current);
+                        setPosition(null);
+                        setOnline(null);
+
+                        const url = new URL(location.href);
+
+                        url.searchParams.delete('room');
+                        history.replaceState(null, '', url);
+                    }}
+                />
+            )}
+        </>
+    );
+}
+
+function OnlineBoard({
+    target,
+    onLeave,
+    ...preferences
+}: {
+    target: string | null;
+    onLeave: () => void;
+} & Pick<
+    GameBoardProps,
+    'soundEnabled' | 'onSoundEnabledChange' | 'recordVisible' | 'onRecordVisibleChange'
+>) {
+    const [room, setRoom] = useState<PeerRoom | null>(null);
+    const [, redraw] = useState(0);
+    const [copied, setCopied] = useState(false);
+    const [confirmLeave, setConfirmLeave] = useState(false);
+
+    useEffect(() => {
+        const current = new PeerRoom(target, () => redraw((value) => value + 1));
+        setRoom(current);
+        current.start();
+
+        const beforeUnload = (event: BeforeUnloadEvent) => event.preventDefault();
+        window.addEventListener('beforeunload', beforeUnload);
+
+        return () => {
+            current.close();
+            window.removeEventListener('beforeunload', beforeUnload);
+        };
+    }, [target]);
+
+    if (!room) return null;
+
+    const controls = (
+        <>
+            {!target && (
+                <button
+                    className="ui-button"
+                    onClick={async () => {
+                        try {
+                            await navigator.clipboard.writeText(room.invitation);
+                            setCopied(true);
+                        } catch {
+                            setCopied(false);
+                        }
+                    }}
+                >
+                    {copied ? '链接已复制' : '复制邀请'}
+                </button>
+            )}
+            {!room.game.ready && (
+                <button className="ui-button" onClick={() => room.reconnect()}>
+                    重连
+                </button>
+            )}
+            <button
+                className="ui-button"
+                onClick={() => {
+                    if (confirmLeave) onLeave();
+                    else setConfirmLeave(true);
+                }}
+            >
+                {confirmLeave ? '确认离开' : '离开'}
+            </button>
+            {confirmLeave && (
+                <button className="ui-button quiet" onClick={() => setConfirmLeave(false)}>
+                    取消
+                </button>
+            )}
+        </>
+    );
+
+    return (
+        <>
+            <div className="online-info" role="status">
+                <span>{room.status}</span>
+                {!target && (
+                    <label>
+                        邀请 ID
+                        <input
+                            aria-label="邀请 ID"
+                            readOnly
+                            value={room.id}
+                            onFocus={(event) => event.target.select()}
+                        />
+                    </label>
+                )}
+            </div>
+            <GameBoard
+                {...preferences}
+                G={room.game.state.G}
+                ctx={room.game.state.ctx}
+                moves={{ move: (from: number, to: number) => room.game.move(from, to) }}
+                initialDraft={null}
+                onApplyPosition={() => {}}
+                online={{ player: room.game.player, ready: room.game.ready, controls }}
+            />
+        </>
     );
 }
