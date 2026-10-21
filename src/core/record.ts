@@ -22,7 +22,6 @@ export class GameRecord {
             initial: {
                 board: state.board.slice(),
                 lastMove: state.lastMove,
-                winner: state.winner,
             },
             moves: [],
         });
@@ -90,7 +89,6 @@ export class GameRecord {
         for (const { from, to } of this.data.moves.slice(0, step)) {
             board.move(from, to);
             state.lastMove = { from, to };
-            state.winner = null;
         }
 
         return state;

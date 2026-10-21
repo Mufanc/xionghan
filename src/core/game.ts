@@ -7,7 +7,6 @@ export interface GameState {
     record?: RecordData;
     board: BoardData;
     lastMove: { from: Index; to: Index } | null;
-    winner: Side | null;
 }
 
 export class Game {
@@ -20,12 +19,11 @@ export class Game {
     }
 
     static initialState(): GameState {
-        return { board: new Board().data, lastMove: null, winner: null };
+        return { board: new Board().data, lastMove: null };
     }
 
     tryMove(from: Index, to: Index, side: Side): boolean {
         if (
-            this.state.winner ||
             !Number.isInteger(from) ||
             !Number.isInteger(to) ||
             from < 0 ||
@@ -38,23 +36,33 @@ export class Game {
             return false;
         }
 
-        const captured = this.board.move(from, to);
+        this.board.move(from, to);
 
         this.state.lastMove = { from, to };
-
-        if (captured?.kind === Kind.King || !this.rules.hasLegalMove(Side.opposite(side))) {
-            this.state.winner = side;
-        }
 
         return true;
     }
 
     findLegalMoves(from: Index): Index[] {
-        return this.state.winner ? [] : this.rules.findLegalMoves(from);
+        return this.rules.findLegalMoves(from);
     }
 
     findForbiddenMoves(from: Index): Index[] {
-        return this.state.winner ? [] : this.rules.findForbiddenMoves(from);
+        return this.rules.findForbiddenMoves(from);
+    }
+
+    getWinner(): Side | null {
+        const lastMove = this.state.lastMove;
+        const side = lastMove ? this.board.at(lastMove.to)?.side : undefined;
+
+        if (!side) return null;
+
+        const opponent = Side.opposite(side);
+        const kingExists = this.state.board.some(
+            (piece) => piece?.side === opponent && piece.kind === Kind.King,
+        );
+
+        return !kingExists || !this.rules.hasLegalMove(opponent) ? side : null;
     }
 
     isCheck(side: Side): boolean {

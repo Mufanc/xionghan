@@ -1,10 +1,8 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Client, type BoardProps } from 'boardgame.io/react';
-import { BoardArt } from '@/components/BoardArt';
-import { PieceArt } from '@/components/PieceArt';
+import { BoardView } from '@/components/BoardView';
 import { PiecePicker } from '@/components/PiecePicker';
-import { PositionMark } from '@/components/PositionMark';
 import { RecordPanel } from '@/components/RecordPanel';
 import { GameRecord } from '@/core/record';
 import { PositionEditor } from '@/core/editor';
@@ -13,7 +11,6 @@ import { Board, type BoardData, type Index } from '@/core/board';
 import { Side, Kind, Piece } from '@/core/piece';
 import { Game, type GameState } from '@/core/game';
 import { useGameSounds } from '@/hooks/use-game-sounds';
-import { useMoveAnimation } from '@/hooks/use-move-animation';
 import { loadSession, saveSession } from '@/storage/session';
 
 const hints: Record<Kind, string> = {
@@ -50,12 +47,12 @@ function GameBoard({
     onSoundEnabledChange,
 }: GameBoardProps) {
     const [selected, setSelected] = useState<Index | null>(null);
-    const [cursor, setCursor] = useState<Index>(149);
     const [confirmReset, setConfirmReset] = useState(false);
     const [draft, setDraft] = useState<BoardData | null>(initialDraft);
     const [picker, setPicker] = useState<Index | null>(null);
     const [reviewStep, setReviewStep] = useState<number | null>(null);
     const [fullscreen, setFullscreen] = useState(!!document.fullscreenElement);
+    const winner: Side | null = ctx.gameover?.winner ?? null;
     const totalSteps = G.record?.moves.length ?? 0;
     const reviewing = reviewStep !== null && reviewStep < totalSteps;
     const displayed = useMemo(
@@ -71,10 +68,10 @@ function GameBoard({
             ? (G.record.moves[reviewStep!]?.side ?? playerSide(ctx.currentPlayer))
             : playerSide(ctx.currentPlayer);
     const destinations =
-        editor || reviewing || selected === null ? [] : game.findLegalMoves(selected);
+        editor || reviewing || winner || selected === null ? [] : game.findLegalMoves(selected);
     const forbiddenDestinations =
-        editor || reviewing || selected === null ? [] : game.findForbiddenMoves(selected);
-    const isCheck = !editor && !displayed.winner && game.isCheck(side);
+        editor || reviewing || winner || selected === null ? [] : game.findForbiddenMoves(selected);
+    const isCheck = !editor && (reviewing || !winner) && game.isCheck(side);
     const unavailablePieces = isCheck
         ? board.flatMap((occupant, index) =>
               occupant?.side === side && game.findLegalMoves(index).length === 0 ? [index] : [],
@@ -82,17 +79,17 @@ function GameBoard({
         : [];
     const sounds = useGameSounds(
         G,
-        !G.winner && new Game(G).isCheck(playerSide(ctx.currentPlayer)),
+        !winner && new Game(G).isCheck(playerSide(ctx.currentPlayer)),
         soundEnabled && !editor && !reviewing,
+        winner,
     );
-    const { boardRef, captured, clearCapture } = useMoveAnimation(G, !editor && !reviewing);
     const sideName = (value: string) => (value === Side.Red ? '红方' : '黑方');
     const status = editor
         ? '摆子中'
         : reviewing
           ? `第 ${reviewStep} 步`
-          : G.winner
-            ? `${sideName(G.winner)}胜`
+          : winner
+            ? `${sideName(winner)}胜`
             : `${sideName(side)}行棋${isCheck ? ' · 将军' : ''}`;
 
     useEffect(() => {
@@ -233,14 +230,11 @@ function GameBoard({
 
     function pick(index: Index) {
         if (editor) {
-            setCursor(index);
             editAt(index);
             return;
         }
 
-        if (reviewing || G.winner || unavailablePieces.includes(index)) return;
-
-        setCursor(index);
+        if (reviewing || winner || unavailablePieces.includes(index)) return;
 
         if (index === selected) {
             setSelected(null);
@@ -255,31 +249,6 @@ function GameBoard({
         } else if (selected !== null) {
             setSelected(null);
         }
-    }
-
-    function navigate(event: KeyboardEvent<HTMLButtonElement>, index: Index) {
-        const { x, y } = Board.coordinatesOf(index);
-
-        const offsets: Record<string, number> = {
-            ArrowLeft: x > 0 ? -1 : 0,
-            ArrowRight: x < 12 ? 1 : 0,
-            ArrowUp: y > 0 ? -Board.SIZE : 0,
-            ArrowDown: y < 12 ? Board.SIZE : 0,
-        };
-
-        if (event.key === 'Escape') {
-            setSelected(null);
-            setPicker(null);
-        }
-
-        if (!(event.key in offsets)) return;
-
-        event.preventDefault();
-
-        const next = index + offsets[event.key];
-
-        setCursor(next);
-        document.getElementById(`point-${next}`)?.focus();
     }
 
     function newGame() {
@@ -404,97 +373,50 @@ function GameBoard({
                     )}
                 </div>
             </nav>
-            <section className="play-area" aria-label="匈汉象棋对局">
-                <div className="player-bar">
-                    <span className={`player ${Side.Black}`}>
-                        <i />
-                        黑方
-                    </span>
-                    <span>單 · 氏 · 都</span>
-                </div>
-                <div
-                    ref={boardRef}
-                    className="board"
-                    role="group"
-                    aria-label="13乘13棋盘，方向键移动焦点，回车选子或落子，Escape取消选择"
-                >
-                    <BoardArt />
-                    {board.map((occupant, index) => {
-                        const { x, y } = Board.coordinatesOf(index);
-                        const possible = destinations.includes(index);
-                        const forbidden = forbiddenDestinations.includes(index);
-                        const lastFrom = !editor && displayed.lastMove?.from === index;
-                        const lastTo = !editor && displayed.lastMove?.to === index;
-                        const isKingInCheck =
-                            occupant?.side === side && occupant.kind === Kind.King && isCheck;
-                        const isDefeatedKing =
-                            !editor &&
-                            !!displayed.winner &&
-                            occupant?.kind === Kind.King &&
-                            occupant.side !== displayed.winner;
-                        const unavailable = unavailablePieces.includes(index);
-                        const active = selected === index || (!!editor && picker === index);
-                        const label = `${'ABCDEFGHIJKLM'[x]}${y + 1}${occupant ? ` ${sideName(occupant.side)}${Piece.nameOf(occupant.side, occupant.kind)}` : ' 空位'}`;
-
-                        return (
-                            <button
-                                key={index}
-                                id={`point-${index}`}
-                                className={`point${active ? ' selected' : ''}${possible ? ' possible' : ''}${isKingInCheck ? ' checked' : ''}${isDefeatedKing ? ' defeated' : ''}${unavailable ? ' unavailable' : ''}`}
-                                tabIndex={cursor === index ? 0 : -1}
-                                aria-label={`${label}${possible ? '，可落子' : ''}${forbidden ? '，禁着：会使己方王受攻击或两王照面' : ''}${lastFrom ? '，上一步起点' : ''}${lastTo ? '，上一步落点' : ''}`}
-                                aria-pressed={active}
-                                aria-disabled={reviewing || (!editor && !!G.winner) || unavailable}
-                                disabled={reviewing || (!editor && !!G.winner)}
-                                onClick={() => pick(index)}
-                                onFocus={() => setCursor(index)}
-                                onKeyDown={(event) => navigate(event, index)}
-                            >
-                                {occupant && (
-                                    <span className={`piece ${occupant.side}`}>
-                                        <PieceArt piece={occupant} />
-                                    </span>
-                                )}
-                                {!editor && !reviewing && captured?.index === index && (
-                                    <span
-                                        className={`piece captured-piece ${captured.piece.side}`}
-                                        aria-hidden="true"
-                                        onAnimationEnd={clearCapture}
-                                    >
-                                        <PieceArt piece={captured.piece} />
-                                    </span>
-                                )}
-                                {lastFrom && <span className="last-from-mark" aria-hidden="true" />}
-                                {(lastTo || (editor && active)) && <PositionMark />}
-                                {forbidden && (
-                                    <span className="move-mark forbidden-mark" aria-hidden="true" />
-                                )}
-                                {possible && (
-                                    <span className={occupant ? 'capture-mark' : 'move-mark'} />
-                                )}
-                            </button>
-                        );
-                    })}
-                    {editor && picker !== null && (
-                        <PiecePicker editor={editor} index={picker} onSelect={placeAt} />
-                    )}
-                </div>
-                <div className="player-bar">
-                    <span className={`player ${Side.Red}`}>
-                        <i />
-                        红方
-                    </span>
-                    <span>皇 · 仕 · 相</span>
-                </div>
-            </section>
+            <BoardView
+                board={board}
+                selected={editor ? (selected ?? picker) : selected}
+                selectionStyle={editor ? 'frame' : 'ring'}
+                destinations={destinations}
+                forbiddenDestinations={forbiddenDestinations}
+                unavailable={unavailablePieces}
+                lastMove={editor ? null : displayed.lastMove}
+                checkedIndex={
+                    isCheck
+                        ? board.findIndex(
+                              (piece) => piece?.side === side && piece.kind === Kind.King,
+                          )
+                        : -1
+                }
+                defeatedIndex={
+                    !editor && !reviewing && winner
+                        ? board.findIndex(
+                              (piece) => piece?.kind === Kind.King && piece.side !== winner,
+                          )
+                        : -1
+                }
+                disabled={!editor && (reviewing || !!winner)}
+                animationState={displayed}
+                animationStep={reviewing ? reviewStep! : totalSteps}
+                animateMoves={!editor}
+                onPick={pick}
+                onCancel={() => {
+                    setSelected(null);
+                    setPicker(null);
+                }}
+            >
+                {editor && picker !== null && (
+                    <PiecePicker editor={editor} index={picker} onSelect={placeAt} />
+                )}
+            </BoardView>
             <footer className="game-footer">
-                <div className={`status ${G.winner ?? side}`} role="status">
+                <div className={`status ${winner ?? side}`} role="status">
                     <i />
                     {status}
                 </div>
                 {!editor && !reviewing && (
                     <p aria-live="polite">
-                        {G.winner
+                        {winner
                             ? '对局结束，点击「新局」再来一盘。'
                             : piece
                               ? `${Piece.nameOf(piece.side, piece.kind)} · ${hints[piece.kind]}${forbiddenDestinations.length ? ' 红点为禁着：会使己方王受攻击或两王照面。' : ''}`

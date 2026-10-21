@@ -29,10 +29,14 @@ export const gameConfig: GameConfig<GameState> = {
             G.record = record;
         },
     },
-    endIf: ({ G }) => (G.winner ? { winner: G.winner } : undefined),
+    endIf: ({ G }) => {
+        const winner = new Game(G).getWinner();
+
+        return winner ? { winner } : undefined;
+    },
     ai: {
         enumerate(G, ctx, playerID) {
-            if (G.winner || playerID !== ctx.currentPlayer) return [];
+            if (ctx.gameover || playerID !== ctx.currentPlayer) return [];
 
             const game = new Game(G);
             const side = playerSide(playerID);
@@ -53,7 +57,7 @@ export function gameFromPosition(board: BoardData): GameConfig<GameState> {
 
     return {
         ...gameConfig,
-        setup: () => ({ board: editor.data.slice(), lastMove: null, winner: null }),
+        setup: () => ({ board: editor.data.slice(), lastMove: null }),
     };
 }
 

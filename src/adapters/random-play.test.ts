@@ -1,3 +1,4 @@
+import { Game } from '@/core/game';
 import { RandomBot, Step } from 'boardgame.io/ai';
 import { Client } from 'boardgame.io/client';
 import { expect, it } from 'vitest';
@@ -38,7 +39,7 @@ it.each(Array.from({ length: 10 }, (_, index) => `random-${index + 1}`))(
             );
 
             if (after.ctx.gameover) {
-                expect(after.G.winner, context).toBe(side);
+                expect(new Game(after.G).getWinner(), context).toBe(side);
                 expect(after.ctx.gameover, context).toEqual({ winner: side });
                 expect(rules.hasLegalMove(Side.opposite(side)), context).toBe(false);
                 expect(
@@ -47,12 +48,12 @@ it.each(Array.from({ length: 10 }, (_, index) => `random-${index + 1}`))(
                 ).toEqual([]);
             } else {
                 expect(after.ctx.currentPlayer, context).not.toBe(before.ctx.currentPlayer);
-                expect(after.G.winner, context).toBeNull();
+                expect(new Game(after.G).getWinner(), context).toBeNull();
             }
         }
 
         console.info(
-            `${seed}: ${plies} plies, ${client.getState()!.G.winner ?? 'step limit reached'}`,
+            `${seed}: ${plies} plies, ${new Game(client.getState()!.G).getWinner() ?? 'step limit reached'}`,
         );
     },
     120_000,

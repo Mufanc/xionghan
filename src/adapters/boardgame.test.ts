@@ -30,7 +30,7 @@ describe('boardgame.io integration', () => {
         const state = client.getState()!;
         expect(state.ctx.currentPlayer).toBe('0');
         expect(state.G.lastMove).toBeNull();
-        expect(state.G.winner).toBeNull();
+        expect(state.ctx.gameover).toBeUndefined();
         expect(state.G.board[p(2, 8)]).toBeNull();
         expect(state.G.board[p(4, 8)]?.kind).toBe(Kind.Pawn);
         client.moves.move(p(4, 8), p(4, 5));
@@ -101,12 +101,12 @@ describe('boardgame.io integration', () => {
         board[p(6, 3)] = { side: Side.Red, kind: Kind.Pawn };
         board[p(4, 2)] = { side: Side.Red, kind: Kind.Chariot };
         const client = Client({
-            game: { ...gameConfig, setup: () => ({ board, lastMove: null, winner: null }) },
+            game: { ...gameConfig, setup: () => ({ board, lastMove: null }) },
         });
         client.moves.move(p(4, 2), p(6, 2));
         expect(client.getState()!.G.board[p(6, 1)]?.kind).toBe(Kind.King);
         expect(client.getState()!.ctx.gameover).toEqual({ winner: Side.Red });
-        expect(new Game(client.getState()!.G).findLegalMoves(p(6, 2))).toEqual([]);
+        expect(new Game(client.getState()!.G).getWinner()).toBe(Side.Red);
     });
 
     it('ends the game when a king is captured and blocks subsequent moves', () => {
@@ -115,11 +115,11 @@ describe('boardgame.io integration', () => {
         board[p(5, 1)] = { side: Side.Black, kind: Kind.King };
         board[p(5, 3)] = { side: Side.Red, kind: Kind.Chariot };
         const client = Client({
-            game: { ...gameConfig, setup: () => ({ board, lastMove: null, winner: null }) },
+            game: { ...gameConfig, setup: () => ({ board, lastMove: null }) },
         });
         client.moves.move(p(5, 3), p(5, 1));
         const state = client.getState()!;
-        expect(state.G.winner).toBe(Side.Red);
+        expect(state.G).not.toHaveProperty('winner');
         expect(state.ctx.gameover).toEqual({ winner: Side.Red });
         const restored = Client({ game: gameFromSession(state.G, '0') });
         expect(restored.getState()!.G).toEqual(state.G);

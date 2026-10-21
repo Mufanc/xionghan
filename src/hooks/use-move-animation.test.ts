@@ -21,9 +21,9 @@ vi.mock('react', () => ({
     },
 }));
 
-function render(state: GameState, enabled = true) {
+function render(state: GameState, enabled = true, step?: number) {
     hooks.cursor = 0;
-    return useMoveAnimation(state, enabled);
+    return useMoveAnimation(state, enabled, step);
 }
 
 beforeEach(() => {
@@ -58,7 +58,7 @@ it('retains the captured piece below a moving piece and cleans up its raised lay
     const board = initial.board.slice();
     board[to] = board[from];
     board[from] = null;
-    const { clearCapture } = render({ board, lastMove: { from, to }, winner: null });
+    const { clearCapture } = render({ board, lastMove: { from, to } });
     const cleanup = hooks.effect();
     expect(hooks.setCaptured).toHaveBeenLastCalledWith({ index: to, piece: initial.board[to] });
     expect(target.style.zIndex).toBe('3');
@@ -96,5 +96,62 @@ it('keeps editing silent visually and does not replay an old move when editing i
     expect(hooks.setCaptured).toHaveBeenLastCalledWith(null);
     render(state, true);
     hooks.effect();
+    expect(hooks.setCaptured).toHaveBeenLastCalledWith(null);
+});
+
+it('animates a single step backwards and restores a captured piece underneath', () => {
+    const initial = Game.initialState();
+    const from = Board.indexOf(2, 8);
+    const to = Board.indexOf(2, 4);
+    const board = initial.board.slice();
+    board[to] = board[from];
+    board[from] = null;
+    const { boardRef } = render({ board, lastMove: { from, to } }, true, 1);
+    hooks.effect();
+    const moving = { cancel: vi.fn(), onfinish: null };
+    const appearing = { cancel: vi.fn() };
+    const animate = vi.fn(() => moving);
+    const fade = vi.fn(() => appearing);
+    const origin = {
+        getBoundingClientRect: () => ({ x: 20, y: 40 }),
+        querySelector: () => ({ animate: fade }),
+    };
+    const target = {
+        style: { zIndex: '', removeProperty: vi.fn() },
+        getBoundingClientRect: () => ({ x: 20, y: 80 }),
+        querySelector: () => ({ animate }),
+    };
+    boardRef.current = {
+        querySelector: (selector: string) => (selector === `#point-${from}` ? target : origin),
+    } as unknown as HTMLDivElement;
+    render(initial, true, 0);
+    const cleanup = hooks.effect();
+    expect(animate).toHaveBeenCalledWith([{ translate: '0px -40px' }, { translate: '0px 0px' }], {
+        duration: 220,
+        easing: 'ease-out',
+    });
+    expect(fade).toHaveBeenCalledWith([{ opacity: 0 }, { opacity: 1 }], {
+        duration: 220,
+        easing: 'ease-out',
+    });
+    expect(target.style.zIndex).toBe('3');
+    expect(hooks.setCaptured).toHaveBeenLastCalledWith(null);
+    cleanup!();
+    expect(moving.cancel).toHaveBeenCalledOnce();
+    expect(appearing.cancel).toHaveBeenCalledOnce();
+});
+
+it('does not animate multi-step jumps or rerenders of the same record step', () => {
+    const initial = Game.initialState();
+    const { boardRef } = render(initial, true, 0);
+    hooks.effect();
+    const querySelector = vi.fn();
+    boardRef.current = { querySelector } as unknown as HTMLDivElement;
+    const state = { ...initial, lastMove: { from: 106, to: 67 } };
+    render(state, true, 3);
+    hooks.effect();
+    render(structuredClone(state), true, 3);
+    hooks.effect();
+    expect(querySelector).not.toHaveBeenCalled();
     expect(hooks.setCaptured).toHaveBeenLastCalledWith(null);
 });

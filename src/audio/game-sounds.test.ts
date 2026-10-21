@@ -20,7 +20,7 @@ function moved(state: GameState, from: number, to: number): GameState {
     const board = state.board.slice();
     board[to] = board[from];
     board[from] = null;
-    return { board, lastMove: { from, to }, winner: null };
+    return { board, lastMove: { from, to } };
 }
 
 beforeEach(() => {
@@ -78,8 +78,7 @@ describe('presentation-layer game sounds', () => {
         sounds.update(state, true);
         expect(instances.at(-1)!.src).toMatch(/check-self\.ogg$/);
         state = moved(state, Board.indexOf(4, 4), Board.indexOf(4, 5));
-        state.winner = Side.Black;
-        sounds.update(state, true);
+        sounds.update(state, true, Side.Black);
         expect(instances.at(-1)!.src).toMatch(/checkmate\.ogg$/);
         expect(instances).toHaveLength(4);
     });

@@ -36,7 +36,7 @@ export class GameSounds {
         this.play(illegal);
     }
 
-    update(state: GameState, isCheck: boolean): void {
+    update(state: GameState, isCheck: boolean, winner: Side | null = null): void {
         const before = this.previous;
 
         // 静音期间也跟进局面，重新开启时不补播过去的走子。
@@ -52,7 +52,7 @@ export class GameSounds {
         const { to } = state.lastMove;
         const side = state.board[to]!.side;
 
-        if (state.winner) {
+        if (winner) {
             this.play(win);
         } else if (isCheck) {
             this.play(tracks.check[side]);

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Game } from '@/core/game';
 import { Client } from 'boardgame.io/client';
-import { gameConfig } from '@/adapters/boardgame';
+import { gameConfig, gameFromSession } from '@/adapters/boardgame';
 import { Board } from '@/core/board';
-import { Side } from '@/core/piece';
+import { Kind, Side } from '@/core/piece';
 import { loadSession, saveSession, type SavedSession } from '@/storage/session';
 
 let value: string | null;
@@ -74,6 +74,55 @@ describe('session storage', () => {
         const mismatched = structuredClone(saved);
         mismatched.game.board[Board.indexOf(4, 8)] = null;
         saveSession(mismatched);
+        expect(loadSession()).toBeNull();
+    });
+
+    it('migrates legacy winner fields without losing the record', () => {
+        const client = Client({ game: gameConfig });
+        client.moves.move(Board.indexOf(2, 8), Board.indexOf(2, 5));
+        const saved = { ...session(), game: client.getState()!.G, currentPlayer: '1' as const };
+        const legacy = structuredClone(saved);
+        Object.assign(legacy.game, { winner: null });
+        Object.assign(legacy.game.record!.initial, { winner: null });
+        value = JSON.stringify(legacy);
+        expect(loadSession()).toEqual(saved);
+        Object.assign(legacy.game, { winner: Side.Red });
+        value = JSON.stringify(legacy);
+        expect(loadSession()).toBeNull();
+    });
+
+    it('recomputes a saved checkmate through bgio and rejects moves after the end', () => {
+        const p = Board.indexOf;
+        const board = Array(Board.SIZE ** 2).fill(null);
+        board[p(6, 11)] = { side: Side.Red, kind: Kind.King };
+        board[p(6, 1)] = { side: Side.Black, kind: Kind.King };
+        board[p(5, 3)] = { side: Side.Red, kind: Kind.Chariot };
+        board[p(7, 2)] = { side: Side.Red, kind: Kind.Pawn };
+        board[p(6, 3)] = { side: Side.Red, kind: Kind.Pawn };
+        board[p(4, 2)] = { side: Side.Red, kind: Kind.Chariot };
+        const client = Client({
+            game: { ...gameConfig, setup: () => ({ board, lastMove: null }) },
+        });
+        client.moves.move(p(4, 2), p(6, 2));
+        const state = client.getState()!;
+        saveSession({ ...session(), game: state.G });
+        const saved = loadSession()!;
+        expect(saved.game).not.toHaveProperty('winner');
+        const restored = Client({ game: gameFromSession(saved.game, saved.currentPlayer) });
+        expect(restored.getState()!.ctx.gameover).toEqual({ winner: Side.Red });
+        const legacy = structuredClone(saved);
+        Object.assign(legacy.game, { winner: Side.Red });
+        Object.assign(legacy.game.record!.initial, { winner: null });
+        value = JSON.stringify(legacy);
+        expect(loadSession()).toEqual(saved);
+        const invalid = structuredClone(saved);
+        invalid.game.record!.moves.push({
+            from: p(6, 1),
+            to: p(6, 0),
+            side: Side.Black,
+            name: '單G退1',
+        });
+        saveSession(invalid);
         expect(loadSession()).toBeNull();
     });
 

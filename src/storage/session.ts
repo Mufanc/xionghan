@@ -56,8 +56,10 @@ export function loadSession(): SavedSession | null {
             typeof saved.soundEnabled !== 'boolean' ||
             (saved.recordVisible !== undefined && typeof saved.recordVisible !== 'boolean') ||
             !saved.game ||
-            (saved.game.winner !== null && !isSide(saved.game.winner)) ||
-            !isBoard(saved.game.board, saved.game.winner) ||
+            (saved.game.winner !== undefined &&
+                saved.game.winner !== null &&
+                !isSide(saved.game.winner)) ||
+            !isBoard(saved.game.board, saved.game.board?.[saved.game.lastMove?.to]?.side ?? null) ||
             (saved.draft !== null && !isBoard(saved.draft))
         )
             return null;
@@ -81,7 +83,7 @@ export function loadSession(): SavedSession | null {
             if (
                 !record ||
                 !record.initial ||
-                record.initial.winner !== null ||
+                (record.initial.winner !== undefined && record.initial.winner !== null) ||
                 !isBoard(record.initial.board) ||
                 !Array.isArray(record.moves)
             )
@@ -90,7 +92,6 @@ export function loadSession(): SavedSession | null {
             const replay: GameState = {
                 board: structuredClone(record.initial.board),
                 lastMove: record.initial.lastMove,
-                winner: null,
             };
             let previousSide: Side | null = null;
 
@@ -101,6 +102,7 @@ export function loadSession(): SavedSession | null {
                     !isIndex(move.from) ||
                     !isIndex(move.to) ||
                     move.side === previousSide ||
+                    new Game(replay).getWinner() !== null ||
                     replay.board[move.from]?.side !== move.side ||
                     move.name !== GameRecord.describe(replay.board, move.from, move.to) ||
                     !new Game(replay).tryMove(move.from, move.to, move.side)
@@ -113,14 +115,22 @@ export function loadSession(): SavedSession | null {
             if (
                 JSON.stringify(replay.board) !== JSON.stringify(saved.game.board) ||
                 JSON.stringify(replay.lastMove) !== JSON.stringify(saved.game.lastMove) ||
-                replay.winner !== saved.game.winner ||
-                (!replay.winner &&
+                (!new Game(replay).getWinner() &&
                     previousSide &&
                     (saved.currentPlayer === '0' ? Side.Red : Side.Black) !==
                         Side.opposite(previousSide))
             )
                 return null;
         }
+
+        const winner = new Game(saved.game).getWinner();
+
+        if (saved.game.winner !== undefined && saved.game.winner !== winner) return null;
+
+        // 旧存档保留局面与棋谱，胜负由 boardgame.io 初始化时重新计算。
+        delete saved.game.winner;
+
+        if (record) delete record.initial.winner;
 
         return saved;
     } catch {
