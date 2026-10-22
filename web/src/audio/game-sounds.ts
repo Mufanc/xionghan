@@ -12,9 +12,9 @@ import win from '@/assets/audio/checkmate.ogg';
 import start from '@/assets/audio/start.ogg';
 
 const tracks = {
-    move: { [Side.Red]: moveSelf, [Side.Black]: moveOpponent },
-    capture: { [Side.Red]: captureSelf, [Side.Black]: captureOpponent },
-    check: { [Side.Red]: checkSelf, [Side.Black]: checkOpponent },
+    move: { self: moveSelf, opponent: moveOpponent },
+    capture: { self: captureSelf, opponent: captureOpponent },
+    check: { self: checkSelf, opponent: checkOpponent },
 };
 
 export class GameSounds {
@@ -51,7 +51,13 @@ export class GameSounds {
         this.play(illegal);
     }
 
-    update(state: GameState, isCheck: boolean, winner: Side | null = null, step?: number): void {
+    update(
+        state: GameState,
+        isCheck: boolean,
+        winner: Side | null = null,
+        step?: number,
+        selfSide = Side.Red,
+    ): void {
         const before = this.previous;
         const duplicate =
             step === this.previousStep &&
@@ -79,16 +85,16 @@ export class GameSounds {
         if (!this.enabled || state.lastMove === before.lastMove) return;
 
         const { to } = state.lastMove;
-        const side = state.board[to]!.side;
+        const perspective = state.board[to]!.side === selfSide ? 'self' : 'opponent';
 
         if (winner) {
             this.play(win);
         } else if (isCheck) {
-            this.play(tracks.check[side]);
+            this.play(tracks.check[perspective]);
         } else if (before.board[to]) {
-            this.play(tracks.capture[side]);
+            this.play(tracks.capture[perspective]);
         } else {
-            this.play(tracks.move[side]);
+            this.play(tracks.move[perspective]);
         }
     }
 

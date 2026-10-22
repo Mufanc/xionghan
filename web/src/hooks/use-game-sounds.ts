@@ -11,6 +11,7 @@ export function useGameSounds(
     step: number,
     volume: number,
     startKey?: string,
+    selfSide = Side.Red,
 ) {
     const started = useRef(false);
     const [sounds] = useState(() => new GameSounds(state, step));
@@ -23,10 +24,13 @@ export function useGameSounds(
     useEffect(() => {
         const mover = state.lastMove ? state.board[state.lastMove.to]?.side : undefined;
         // 联机预览落子后 ctx 可能尚未换方，音效只看实际落子方攻击的王。
-        const isCheck = mover ? new Game(state).isCheck(Side.opposite(mover)) : false;
+        const game = new Game(state);
+        const isCheck = mover ? game.isCheck(Side.opposite(mover)) : false;
+        // 本地预测落子时 ctx.gameover 尚未确认，将死音效也以实际局面为准。
+        const result = winner ?? (mover ? game.getWinner() : null);
 
-        sounds.update(state, isCheck, winner, step);
-    }, [sounds, state, winner, step]);
+        sounds.update(state, isCheck, result, step, selfSide);
+    }, [sounds, state, winner, step, selfSide]);
 
     useEffect(() => () => sounds.stop(), [sounds]);
 

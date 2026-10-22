@@ -126,3 +126,24 @@ it('plays check immediately from the moved piece, before network turn confirmati
     expect(audio).toHaveLength(1);
     expect(audio[0].pause).not.toHaveBeenCalled();
 });
+
+it('plays checkmate immediately before network gameover confirmation and keeps it playing', () => {
+    const initial: GameState = { board: Array(169).fill(null), lastMove: null };
+    const p = Board.indexOf;
+    initial.board[p(6, 11)] = { side: Side.Red, kind: Kind.King };
+    initial.board[p(6, 1)] = { side: Side.Black, kind: Kind.King };
+    initial.board[p(5, 3)] = { side: Side.Red, kind: Kind.Chariot };
+    initial.board[p(7, 3)] = { side: Side.Red, kind: Kind.Chariot };
+    initial.board[p(6, 3)] = { side: Side.Red, kind: Kind.Pawn };
+    initial.board[p(4, 2)] = { side: Side.Red, kind: Kind.Chariot };
+    render(undefined, true, initial);
+    const next = structuredClone(initial);
+    expect(new Game(next).tryMove(p(4, 2), p(6, 2), Side.Red)).toBe(true);
+    expect(new Game(next).getWinner()).toBe(Side.Red);
+    render(undefined, true, next, 1);
+    expect(audio).toHaveLength(1);
+    expect(audio[0].src).toMatch(/checkmate\.ogg$/);
+    render(undefined, true, structuredClone(next), 1);
+    expect(audio).toHaveLength(1);
+    expect(audio[0].pause).not.toHaveBeenCalled();
+});

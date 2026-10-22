@@ -172,3 +172,27 @@ describe('presentation-layer game sounds', () => {
         expect(instances[1].src).toMatch(/capture-opponent\.ogg$/);
     });
 });
+
+it.each([Side.Red, Side.Black])(
+    'plays move, capture and check from the %s player perspective',
+    (selfSide) => {
+        for (const mover of [Side.Red, Side.Black]) {
+            for (const type of ['move', 'capture', 'check']) {
+                const initial = Game.initialState();
+                const sounds = new GameSounds(initial, 0);
+                sounds.setEnabled(true);
+                const from = Board.indexOf(2, mover === Side.Red ? 8 : 4);
+                const to = Board.indexOf(2, type === 'capture' ? (mover === Side.Red ? 4 : 8) : 5);
+                const next = moved(initial, from, to);
+                sounds.update(next, type === 'check', null, 1, selfSide);
+                const audio = instances.at(-1)!;
+                expect(audio.src).toMatch(
+                    new RegExp(`${type}-${mover === selfSide ? 'self' : 'opponent'}\\.ogg$`),
+                );
+                sounds.update(structuredClone(next), type === 'check', null, 1, selfSide);
+                expect(instances.at(-1)).toBe(audio);
+                expect(audio.pause).not.toHaveBeenCalled();
+            }
+        }
+    },
+);

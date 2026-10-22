@@ -12,6 +12,9 @@ export function useMoveAnimation(state: MoveAnimationState, enabled = true, step
     const previousState = useRef({ state, step });
     const [captured, setCaptured] = useState<{ index: Index; piece: Piece } | null>(null);
 
+    // 联机确认会替换状态对象；相同局面不能触发 effect 清理，打断本地预测动画。
+    const position = JSON.stringify(state.board.map((piece) => piece && [piece.side, piece.kind]));
+
     useLayoutEffect(() => {
         const previous = previousState.current;
         const delta =
@@ -69,7 +72,7 @@ export function useMoveAnimation(state: MoveAnimationState, enabled = true, step
             restored?.cancel();
             to.style.removeProperty('z-index');
         };
-    }, [state, enabled, step]);
+    }, [position, state.lastMove?.from, state.lastMove?.to, enabled, step]);
 
     return { boardRef, captured, clearCapture: () => setCaptured(null) };
 }

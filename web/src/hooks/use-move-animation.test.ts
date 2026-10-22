@@ -8,6 +8,8 @@ const hooks = vi.hoisted(() => ({
     cursor: 0,
     effect: () => undefined as (() => void) | undefined,
     setCaptured: vi.fn(),
+    dependencies: null as unknown[] | null,
+    cleanup: undefined as (() => void) | undefined,
 }));
 
 vi.mock('react', () => ({
@@ -16,8 +18,15 @@ vi.mock('react', () => ({
         return (hooks.refs[index] ??= { current: initial });
     },
     useState: () => [null, hooks.setCaptured],
-    useLayoutEffect: (effect: typeof hooks.effect) => {
-        hooks.effect = effect;
+    useLayoutEffect: (effect: typeof hooks.effect, dependencies: unknown[]) => {
+        hooks.effect = () => {
+            if (hooks.dependencies?.every((value, index) => Object.is(value, dependencies[index])))
+                return;
+            hooks.cleanup?.();
+            hooks.dependencies = dependencies;
+            hooks.cleanup = effect();
+            return hooks.cleanup;
+        };
     },
 }));
 
@@ -28,6 +37,8 @@ function render(state: GameState, enabled = true, step?: number) {
 
 beforeEach(() => {
     hooks.refs.length = 0;
+    hooks.dependencies = null;
+    hooks.cleanup = undefined;
     hooks.setCaptured.mockClear();
     vi.stubGlobal('matchMedia', () => ({ matches: false }));
 });
@@ -153,5 +164,45 @@ it('does not animate multi-step jumps or rerenders of the same record step', () 
     render(structuredClone(state), true, 3);
     hooks.effect();
     expect(querySelector).not.toHaveBeenCalled();
+    expect(hooks.setCaptured).toHaveBeenLastCalledWith(null);
+});
+
+it('keeps the optimistic animation and captured piece through server confirmation, but cancels a correction', () => {
+    const initial = Game.initialState();
+    const { boardRef } = render(initial, true, 0);
+    hooks.effect();
+    const from = Board.indexOf(2, 8);
+    const to = Board.indexOf(2, 4);
+    const animation = { cancel: vi.fn(), onfinish: null };
+    const animate = vi.fn(() => animation);
+    const target = {
+        style: { zIndex: '', removeProperty: vi.fn() },
+        getBoundingClientRect: () => ({ x: 20, y: 40 }),
+        querySelector: () => ({ animate }),
+    };
+    boardRef.current = {
+        querySelector: (selector: string) =>
+            selector === `#point-${to}`
+                ? target
+                : { getBoundingClientRect: () => ({ x: 20, y: 80 }) },
+    } as unknown as HTMLDivElement;
+    const predicted = structuredClone(initial);
+    predicted.board[to] = predicted.board[from];
+    predicted.board[from] = null;
+    predicted.lastMove = { from, to };
+    render(predicted, true, 1);
+    hooks.effect();
+    expect(animate).toHaveBeenCalledOnce();
+    hooks.setCaptured.mockClear();
+    render(structuredClone(predicted), true, 1);
+    hooks.effect();
+    expect(animation.cancel).not.toHaveBeenCalled();
+    expect(animate).toHaveBeenCalledOnce();
+    expect(hooks.setCaptured).not.toHaveBeenCalled();
+    expect(target.style.zIndex).toBe('3');
+    // 同一步数下服务端纠正了实际局面，必须清理旧动画。
+    render(initial, true, 1);
+    hooks.effect();
+    expect(animation.cancel).toHaveBeenCalledOnce();
     expect(hooks.setCaptured).toHaveBeenLastCalledWith(null);
 });

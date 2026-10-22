@@ -166,6 +166,7 @@ function GameBoard({
             : playStart
               ? 'local'
               : undefined,
+        online ? playerSide(online.playerID) : Side.Red,
     );
     const sideName = (value: string) => (value === Side.Red ? '红方' : '黑方');
     const status = editor
