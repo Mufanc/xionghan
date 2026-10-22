@@ -2,8 +2,12 @@ import { Board, type BoardData, type Index } from './board.js';
 import { Kind, Side } from './piece.js';
 import { Rules } from './rules.js';
 import type { RecordData } from './record.js';
+import type { Takeback } from './online.js';
 
 export interface GameState {
+    takeback?: Takeback;
+    takebackUsed?: Record<string, boolean>;
+    takebackSerial?: number;
     record?: RecordData;
     board: BoardData;
     lastMove: { from: Index; to: Index } | null;

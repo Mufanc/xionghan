@@ -83,7 +83,10 @@ export class GameRecord {
             throw new RangeError('Invalid record step');
         }
 
-        const state = structuredClone(this.data.initial);
+        const state: GameState = {
+            board: this.data.initial.board.map((piece) => piece && { ...piece }),
+            lastMove: this.data.initial.lastMove && { ...this.data.initial.lastMove },
+        };
         const board = new Board(state.board);
 
         for (const { from, to } of this.data.moves.slice(0, step)) {

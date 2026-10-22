@@ -4,6 +4,7 @@ import { Client, type BoardProps } from 'boardgame.io/react';
 import { SocketIO } from 'boardgame.io/multiplayer';
 import { RoomPage, ConnectionPending } from '@/online/RoomPage';
 import { Rooms, invitationURL, type RoomSession } from '@/online/rooms';
+import { onlineGameConfig, takebackSteps } from '@xionghan/core/online';
 import { BoardView } from '@/components/BoardView';
 import { PiecePicker } from '@/components/PiecePicker';
 import { RecordPanel } from '@/components/RecordPanel';
@@ -125,7 +126,34 @@ function GameBoard({
     const [fullscreen, setFullscreen] = useState(!!document.fullscreenElement);
     const opponent = matchData?.find((player) => String(player.id) !== playerID);
     const waiting = !!online && !opponent?.name;
-    const canPlay = !archive && (!online || (!!isConnected && isActive && !!opponent?.isConnected));
+    const [now, setNow] = useState(Date.now);
+    const pendingTakeback = online && G.takeback && G.takeback.expiresAt > now ? G.takeback : null;
+    const canPlay =
+        !archive &&
+        !(pendingTakeback && pendingTakeback.playerID === playerID) &&
+        (!online ||
+            (!!isConnected &&
+                isActive &&
+                playerID === ctx.currentPlayer &&
+                !!opponent?.isConnected));
+
+    useEffect(() => {
+        if (!G.takeback || !online) return;
+
+        setNow(Date.now());
+        const timer = setInterval(() => {
+            const time = Date.now();
+            setNow(time);
+            if (time >= G.takeback!.expiresAt) clearInterval(timer);
+        }, 200);
+
+        return () => clearInterval(timer);
+    }, [G.takeback, online]);
+
+    useEffect(() => {
+        setSelected(null);
+    }, [pendingTakeback?.id]);
+
     const winner: Side | null = ctx.gameover?.winner ?? null;
     const totalSteps = G.record?.moves.length ?? 0;
     const canReview = !online || !!ctx.gameover;
@@ -487,6 +515,21 @@ function GameBoard({
                                     邀请朋友
                                 </button>
                             )}
+                            <button
+                                disabled={
+                                    !!ctx.gameover ||
+                                    !isConnected ||
+                                    !opponent?.isConnected ||
+                                    !!pendingTakeback ||
+                                    !takebackSteps(G, ctx.currentPlayer, online.playerID)
+                                }
+                                onClick={() => {
+                                    menu.current?.hidePopover();
+                                    moves.requestTakeback();
+                                }}
+                            >
+                                申请悔棋
+                            </button>
                             <button onClick={onReturnLobby}>返回大厅</button>
                         </>
                     ) : editor ? (
@@ -682,6 +725,40 @@ function GameBoard({
                     </button>
                 </div>
             </dialog>
+            {pendingTakeback && (
+                <section className="takeback-notice" aria-label="悔棋申请">
+                    <div role="status">
+                        <strong>
+                            {pendingTakeback.playerID === playerID
+                                ? '等待对方确认'
+                                : '对方申请悔棋'}
+                        </strong>
+                        <span>
+                            撤回 {totalSteps - pendingTakeback.targetStep} 步 ·{' '}
+                            {Math.max(0, Math.ceil((pendingTakeback.expiresAt - now) / 1000))}{' '}
+                            秒后自动拒绝
+                        </span>
+                    </div>
+                    {pendingTakeback.playerID !== playerID && (
+                        <div>
+                            <button
+                                className="ui-button quiet"
+                                disabled={!isConnected}
+                                onClick={() => moves.respondTakeback(pendingTakeback.id, false)}
+                            >
+                                拒绝
+                            </button>
+                            <button
+                                className="ui-button primary"
+                                disabled={!isConnected}
+                                onClick={() => moves.respondTakeback(pendingTakeback.id, true)}
+                            >
+                                同意
+                            </button>
+                        </div>
+                    )}
+                </section>
+            )}
             {online && (
                 <dialog
                     className="reset-dialog share-dialog"
@@ -893,7 +970,7 @@ function GameApp() {
     const OnlineClient = useMemo(
         () =>
             Client<GameState, GameBoardProps>({
-                game: gameConfig,
+                game: onlineGameConfig,
                 board: GameBoard,
                 multiplayer: SocketIO({ server: rooms.server }),
                 numPlayers: 2,

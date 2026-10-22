@@ -8,7 +8,7 @@ const path = require('node:path');
 const { setTimeout: delay } = require('node:timers/promises');
 const { Client } = require('boardgame.io/client');
 const { SocketIO } = require('boardgame.io/multiplayer');
-const { gameConfig } = require('@xionghan/core/boardgame');
+const { onlineGameConfig: gameConfig } = require('@xionghan/core/online');
 const { Board } = require('@xionghan/core/board');
 
 async function start(dir, env = {}) {
@@ -541,6 +541,69 @@ test(
             assert.equal((await read(bob)).status, 403);
         } finally {
             await server?.stop();
+            await rm(dir, { recursive: true, force: true });
+        }
+    },
+);
+
+test(
+    'takeback survives reconnect, follows opponent moves and expires on the server',
+    { timeout: 30000 },
+    async () => {
+        const dir = await mkdtemp(path.join(tmpdir(), 'xionghan-takeback-'));
+        let server;
+        const clients = [];
+
+        try {
+            server = await start(dir);
+            const { matchID } = await (
+                await post(server.base, '/create', { numPlayers: 2 })
+            ).json();
+            const seats = await Promise.all(
+                ['0', '1'].map(async (playerID) =>
+                    (
+                        await post(server.base, `/${matchID}/join`, {
+                            playerID,
+                            playerName: playerID,
+                        })
+                    ).json(),
+                ),
+            );
+            clients.push(...seats.map((seat) => connect(server.base, matchID, seat)));
+            await waitFor(() => clients.every((client) => client.getState()?.isConnected));
+            const [red, black] = clients;
+            const p = Board.indexOf;
+            red.moves.move(p(2, 8), p(2, 5));
+            await waitFor(() =>
+                clients.every((client) => client.getState()?.G.record?.moves.length === 1),
+            );
+            red.moves.requestTakeback();
+            await waitFor(() => clients.every((client) => client.getState()?.G.takeback?.id === 1));
+            const deadline = red.getState().G.takeback.expiresAt;
+            red.stop();
+            clients.splice(clients.indexOf(red), 1);
+            const reconnected = connect(server.base, matchID, seats[0]);
+            clients.push(reconnected);
+            await waitFor(() => reconnected.getState()?.G.takeback?.id === 1);
+            assert.equal(reconnected.getState().G.takeback.expiresAt, deadline);
+            black.moves.move(p(4, 4), p(4, 7));
+            await waitFor(() => reconnected.getState()?.G.record?.moves.length === 2);
+            black.moves.respondTakeback(1, true);
+            await waitFor(() => reconnected.getState()?.G.record?.moves.length === 0);
+            assert.equal(reconnected.getState().ctx.currentPlayer, '0');
+            reconnected.moves.move(p(2, 8), p(2, 5));
+            await waitFor(() => black.getState()?.G.record?.moves.length === 1);
+            reconnected.moves.requestTakeback();
+            await waitFor(() => black.getState()?.G.takeback?.id === 2);
+            await delay(Math.max(0, black.getState().G.takeback.expiresAt - Date.now()) + 30);
+            black.moves.respondTakeback(2, true);
+            black.moves.move(p(4, 4), p(4, 7));
+            await waitFor(() => reconnected.getState()?.G.record?.moves.length === 2);
+            assert.equal(reconnected.getState().G.takebackUsed['0'], true);
+            assert.equal(reconnected.getState().G.takeback, undefined);
+        } finally {
+            clients.forEach((client) => client.stop());
+            if (server) await server.stop();
             await rm(dir, { recursive: true, force: true });
         }
     },

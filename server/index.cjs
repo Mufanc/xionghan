@@ -1,6 +1,6 @@
 const path = require('node:path');
 const { Server, FlatFile, SocketIO } = require('boardgame.io/server');
-const { gameConfig } = require('@xionghan/core/boardgame');
+const { onlineGameConfig: gameConfig } = require('@xionghan/core/online');
 const { RoomLimits, clientIP } = require('./limits.cjs');
 const { identity, ownedSeat } = require('./identity.cjs');
 

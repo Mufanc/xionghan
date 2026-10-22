@@ -852,3 +852,26 @@ i {
 .sound-toggle[aria-checked='true'] .sound-switch::after {
     transform: translateX(12px);
 }
+
+.takeback-notice {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 12px 16px;
+    border: 1px solid #cbbda7;
+    border-radius: 8px;
+    background: #f6f2e9;
+    color: #62513d;
+}
+.takeback-notice > div {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.takeback-notice span {
+    font-size: 14px;
+}
