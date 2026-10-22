@@ -18,6 +18,7 @@ it('renders a read-only live record without dimming or enabling history navigati
 
 it('keeps history navigation available for local games', () => {
     const html = renderToStaticMarkup(<RecordPanel record={record} step={0} onSelect={() => {}} />);
-    expect(html).toContain('回到对局');
+    expect(html).not.toContain('回到对局');
+    expect(html).toContain('aria-label="最新局面"');
     expect(html.match(/disabled=""/g)).toHaveLength(2);
 });

@@ -75,11 +75,6 @@ export function RecordPanel({ record, step, onSelect }: RecordPanelProps) {
                 ))}
             </div>
             <div className="record-controls">
-                {onSelect && step < moves.length && (
-                    <button className="return-to-game" onClick={() => onSelect?.(moves.length)}>
-                        回到对局
-                    </button>
-                )}
                 <button
                     aria-label="起始局面"
                     title="起始局面"

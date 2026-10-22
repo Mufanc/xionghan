@@ -724,10 +724,6 @@ i {
     justify-content: flex-end;
     gap: 8px;
 }
-.record-controls .return-to-game {
-    grid-column: 1 / -1;
-    font-size: 12px;
-}
 
 @media (max-width: 600px) {
     .game-menu {
