@@ -128,7 +128,8 @@ function GameBoard({
     const canPlay = !archive && (!online || (!!isConnected && isActive && !!opponent?.isConnected));
     const winner: Side | null = ctx.gameover?.winner ?? null;
     const totalSteps = G.record?.moves.length ?? 0;
-    const reviewing = !online && reviewStep !== null && reviewStep < totalSteps;
+    const canReview = !online || !!ctx.gameover;
+    const reviewing = canReview && reviewStep !== null && reviewStep < totalSteps;
     const displayed = useMemo(
         () => (reviewing && G.record ? new GameRecord(G.record).stateAt(reviewStep!) : G),
         [G, reviewing, reviewStep],
@@ -779,7 +780,7 @@ function GameBoard({
                     record={G.record}
                     step={reviewing ? reviewStep! : totalSteps}
                     onSelect={
-                        online
+                        !canReview
                             ? undefined
                             : (step) => {
                                   setReviewStep(step === totalSteps ? null : step);
