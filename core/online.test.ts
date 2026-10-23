@@ -143,3 +143,37 @@ it('clears pending requests on game over and forbids post-game takebacks', () =>
     client.moves.requestTakeback();
     expect(client.getState()!.G.takeback).toBeUndefined();
 });
+
+it.each([1, 2])(
+    'locks both players after a %i-ply takeback until each makes a new move',
+    (steps) => {
+        const client = game();
+        client.moves.move(...red);
+        client.updatePlayerID('1');
+        client.moves.move(...black);
+        client.updatePlayerID('0');
+        client.moves.move(p(6, 8), p(6, 5));
+        client.updatePlayerID('1');
+        client.moves.move(p(8, 4), p(8, 7));
+        client.updatePlayerID('0');
+        if (steps === 1) client.moves.move(p(10, 8), p(10, 5));
+        client.moves.requestTakeback();
+        client.updatePlayerID('1');
+        client.moves.respondTakeback(1, true);
+        expect(client.getState()!.G.takebackUsed).toEqual({ '0': true, '1': true });
+        client.moves.requestTakeback();
+        expect(client.getState()!.G.takeback).toBeUndefined();
+        client.updatePlayerID('0');
+        client.moves.requestTakeback();
+        expect(client.getState()!.G.takeback).toBeUndefined();
+        const column = steps === 1 ? 10 : 6;
+        client.moves.move(p(column, 8), p(column, 5));
+        expect(takebackSteps(client.getState()!.G, '1', '0')).toBe(1);
+        client.updatePlayerID('1');
+        client.moves.requestTakeback();
+        expect(client.getState()!.G.takeback).toBeUndefined();
+        client.moves.move(p(2, 4), p(2, 5));
+        client.moves.requestTakeback();
+        expect(client.getState()!.G.takeback?.playerID).toBe('1');
+    },
+);

@@ -4,7 +4,7 @@
     "version": "0.1.0",
     "type": "commonjs",
     "scripts": {
-        "dev": "node --watch index.cjs",
+        "dev": "NODE_ENV=development node --watch index.cjs",
         "start": "node index.cjs",
         "build": "node --check index.cjs && node --check limits.cjs && node --check identity.cjs",
         "test": "node --test *.test.cjs"

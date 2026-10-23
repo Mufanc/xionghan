@@ -65,6 +65,30 @@ async function post(base, route, body) {
     });
 }
 
+test('only development accepts unlisted remote origins', async () => {
+    for (const mode of ['development', 'test']) {
+        const dir = await mkdtemp(path.join(tmpdir(), 'xionghan-origins-'));
+        let server;
+
+        try {
+            server = await start(dir, { NODE_ENV: mode });
+            const origin = 'https://remote.example:22341';
+            const response = await fetch(`${server.base}/games/XiongHan/create`, {
+                method: 'POST',
+                headers: { Origin: origin, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ numPlayers: 2 }),
+            });
+            assert.equal(response.status, mode === 'development' ? 200 : 403);
+            if (mode === 'development') {
+                assert.equal(response.headers.get('access-control-allow-origin'), origin);
+            }
+        } finally {
+            await server?.stop();
+            await rm(dir, { recursive: true, force: true });
+        }
+    }
+});
+
 function connect(base, matchID, seat) {
     const client = Client({
         game: gameConfig,

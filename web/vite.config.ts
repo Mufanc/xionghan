@@ -42,7 +42,8 @@ export default defineConfig({
     ],
     server: {
         proxy: {
-            '/games': 'http://127.0.0.1:8000',
+            // 保留网页 Host，让远程访问通过服务端的同源检查。
+            '/games': { target: 'http://127.0.0.1:8000', changeOrigin: false },
             '/socket.io': { target: 'http://127.0.0.1:8000', ws: true },
         },
     },

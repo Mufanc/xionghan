@@ -5,9 +5,14 @@ const { RoomLimits, clientIP } = require('./limits.cjs');
 const { identity, ownedSeat } = require('./identity.cjs');
 
 const port = Number(process.env.PORT ?? 8000);
+const development = process.env.NODE_ENV === 'development';
 const origins = (process.env.WEB_ORIGINS ?? 'http://127.0.0.1:5173,http://localhost:5173')
     .split(',')
     .map((origin) => origin.trim());
+
+function allowsOrigin(origin) {
+    return development || origins.includes(origin);
+}
 
 if (!Number.isInteger(port) || port < 0 || port > 65535) {
     throw new Error('PORT must be an integer between 0 and 65535');
@@ -203,7 +208,7 @@ class RoomStore extends FlatFile {
 const db = new RoomStore({ dir: process.env.DATA_DIR ?? path.join(__dirname, 'data') });
 const server = Server({
     games: [gameConfig],
-    origins,
+    origins: development ? [/.*/] : origins,
     db,
     transport: new SocketIO({ socketOpts: { maxHttpBufferSize: 65536 } }),
     authenticateCredentials: (credentials, player) =>
@@ -287,7 +292,7 @@ server.app.use(async (ctx, next) => {
     } catch (error) {
         const origin = ctx.get('origin');
 
-        if (ctx.path.startsWith('/games/XiongHan') && origins.includes(origin)) {
+        if (ctx.path.startsWith('/games/XiongHan') && allowsOrigin(origin)) {
             error.headers = {
                 ...error.headers,
                 'Access-Control-Allow-Origin': origin,
@@ -315,7 +320,7 @@ server.app.use(async (ctx, next) => {
             ctx.set('Retry-After', String(retry));
             const origin = ctx.get('origin');
 
-            if (origins.includes(origin)) {
+            if (allowsOrigin(origin)) {
                 ctx.set('Access-Control-Allow-Origin', origin);
                 ctx.vary('Origin');
             }
@@ -329,8 +334,7 @@ server.app.use(async (ctx, next) => {
         const origin = ctx.get('origin');
         const sameOrigin = origin === `http://${ctx.host}` || origin === `https://${ctx.host}`;
 
-        if (origin && !sameOrigin && !origins.includes(origin))
-            ctx.throw(403, 'Origin not allowed');
+        if (origin && !sameOrigin && !allowsOrigin(origin)) ctx.throw(403, 'Origin not allowed');
 
         if (origin) {
             ctx.set('Access-Control-Allow-Origin', origin);
@@ -395,7 +399,7 @@ server.app.use(async (ctx, next) => {
     if (ctx.method === 'GET' && ctx.path === '/games/XiongHan/waiting') {
         const origin = ctx.get('origin');
 
-        if (origins.includes(origin)) {
+        if (allowsOrigin(origin)) {
             ctx.set('Access-Control-Allow-Origin', origin);
             ctx.vary('Origin');
         }

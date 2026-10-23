@@ -105,6 +105,7 @@ export const onlineGameConfig: GameConfig<GameState> = {
                     G.board = restored.board;
                     G.lastMove = restored.lastMove;
                     record.moves.length = step;
+                    G.takebackUsed = { '0': true, '1': true };
                     events.endTurn({ next: request.playerID });
                 }
 

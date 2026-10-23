@@ -7,6 +7,7 @@ import { Rooms, invitationURL, type RoomSession } from '@/online/rooms';
 import { onlineGameConfig, takebackSteps } from '@xionghan/core/online';
 import { BoardView } from '@/components/BoardView';
 import { PiecePicker } from '@/components/PiecePicker';
+import { OnlineControls } from '@/components/OnlineControls';
 import { RecordPanel } from '@/components/RecordPanel';
 import { GameRecord } from '@xionghan/core/record';
 import { PositionEditor } from '@xionghan/core/editor';
@@ -432,7 +433,7 @@ function GameBoard({
 
     return (
         <main
-            className={`game${editor ? ' editing' : ''}${!recordVisible ? ' record-hidden' : ''}`}
+            className={`game${online ? ' online' : ''}${editor ? ' editing' : ''}${!recordVisible ? ' record-hidden' : ''}`}
         >
             <header className="topbar">
                 <div className="identity">
@@ -451,11 +452,7 @@ function GameBoard({
                     </h1>
                 </div>
                 <nav className="view-controls" aria-label={editor ? '摆子操作' : '对局操作'}>
-                    {waiting ? (
-                        <button className="ui-button" onClick={share}>
-                            邀请朋友
-                        </button>
-                    ) : editor ? (
+                    {editor ? (
                         <>
                             <button
                                 className="ui-button quiet"
@@ -467,7 +464,7 @@ function GameBoard({
                                 开始对弈
                             </button>
                         </>
-                    ) : (
+                    ) : !online ? (
                         <button
                             className="ui-button"
                             aria-pressed={recordVisible}
@@ -482,7 +479,7 @@ function GameBoard({
                             <span className="toggle-dot" aria-hidden="true" />
                             棋谱
                         </button>
-                    )}
+                    ) : null}
                     <button className="ui-button" popoverTarget="game-menu">
                         菜单
                     </button>
@@ -500,85 +497,58 @@ function GameBoard({
                 ref={menu}
                 aria-label="操作菜单"
             >
-                <div className="menu-group">
-                    {archive ? (
-                        <button onClick={onReturnLobby}>返回大厅</button>
-                    ) : online ? (
-                        <>
-                            {waiting && (
+                {!online && (
+                    <div className="menu-group">
+                        {archive ? (
+                            <button onClick={onReturnLobby}>返回大厅</button>
+                        ) : editor ? (
+                            <>
+                                <button
+                                    onClick={() => {
+                                        editor.clear();
+                                        setDraft(editor.data);
+                                        setSelected(null);
+                                        setPicker(null);
+                                        menu.current?.hidePopover();
+                                    }}
+                                >
+                                    清空棋盘
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        editor.reset();
+                                        setDraft(editor.data);
+                                        setSelected(null);
+                                        setPicker(null);
+                                        menu.current?.hidePopover();
+                                    }}
+                                >
+                                    默认布局
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <button
+                                    disabled={reviewing}
+                                    onClick={() => {
+                                        menu.current?.hidePopover();
+                                        transitionLayout(beginEdit);
+                                    }}
+                                >
+                                    摆子
+                                </button>
                                 <button
                                     onClick={() => {
                                         menu.current?.hidePopover();
-                                        share();
+                                        newGame();
                                     }}
                                 >
-                                    邀请朋友
+                                    新局
                                 </button>
-                            )}
-                            <button
-                                disabled={
-                                    !!ctx.gameover ||
-                                    !isConnected ||
-                                    !opponent?.isConnected ||
-                                    !!pendingTakeback ||
-                                    !takebackSteps(G, ctx.currentPlayer, online.playerID)
-                                }
-                                onClick={() => {
-                                    menu.current?.hidePopover();
-                                    moves.requestTakeback();
-                                }}
-                            >
-                                申请悔棋
-                            </button>
-                            <button onClick={onReturnLobby}>返回大厅</button>
-                        </>
-                    ) : editor ? (
-                        <>
-                            <button
-                                onClick={() => {
-                                    editor.clear();
-                                    setDraft(editor.data);
-                                    setSelected(null);
-                                    setPicker(null);
-                                    menu.current?.hidePopover();
-                                }}
-                            >
-                                清空棋盘
-                            </button>
-                            <button
-                                onClick={() => {
-                                    editor.reset();
-                                    setDraft(editor.data);
-                                    setSelected(null);
-                                    setPicker(null);
-                                    menu.current?.hidePopover();
-                                }}
-                            >
-                                默认布局
-                            </button>
-                        </>
-                    ) : (
-                        <>
-                            <button
-                                disabled={reviewing}
-                                onClick={() => {
-                                    menu.current?.hidePopover();
-                                    transitionLayout(beginEdit);
-                                }}
-                            >
-                                摆子
-                            </button>
-                            <button
-                                onClick={() => {
-                                    menu.current?.hidePopover();
-                                    newGame();
-                                }}
-                            >
-                                新局
-                            </button>
-                        </>
-                    )}
-                </div>
+                            </>
+                        )}
+                    </div>
+                )}
                 {!editor && (
                     <div className="menu-group">
                         <button
@@ -725,40 +695,6 @@ function GameBoard({
                     </button>
                 </div>
             </dialog>
-            {pendingTakeback && (
-                <section className="takeback-notice" aria-label="悔棋申请">
-                    <div role="status">
-                        <strong>
-                            {pendingTakeback.playerID === playerID
-                                ? '等待对方确认'
-                                : '对方申请悔棋'}
-                        </strong>
-                        <span>
-                            撤回 {totalSteps - pendingTakeback.targetStep} 步 ·{' '}
-                            {Math.max(0, Math.ceil((pendingTakeback.expiresAt - now) / 1000))}{' '}
-                            秒后自动拒绝
-                        </span>
-                    </div>
-                    {pendingTakeback.playerID !== playerID && (
-                        <div>
-                            <button
-                                className="ui-button quiet"
-                                disabled={!isConnected}
-                                onClick={() => moves.respondTakeback(pendingTakeback.id, false)}
-                            >
-                                拒绝
-                            </button>
-                            <button
-                                className="ui-button primary"
-                                disabled={!isConnected}
-                                onClick={() => moves.respondTakeback(pendingTakeback.id, true)}
-                            >
-                                同意
-                            </button>
-                        </div>
-                    )}
-                </section>
-            )}
             {online && (
                 <dialog
                     className="reset-dialog share-dialog"
@@ -836,10 +772,12 @@ function GameBoard({
                 )}
             </BoardView>
             <footer className="game-footer">
-                <div className={`status ${winner ?? side}`} role="status">
-                    <i />
-                    {status}
-                </div>
+                {!online && (
+                    <div className={`status ${winner ?? side}`} role="status">
+                        <i />
+                        {status}
+                    </div>
+                )}
                 {!editor && !reviewing && (
                     <p aria-live="polite">
                         {winner
@@ -852,20 +790,47 @@ function GameBoard({
                     </p>
                 )}
             </footer>
-            {!editor && recordVisible && (
-                <RecordPanel
-                    record={G.record}
-                    step={reviewing ? reviewStep! : totalSteps}
-                    onSelect={
-                        !canReview
-                            ? undefined
-                            : (step) => {
-                                  setReviewStep(step === totalSteps ? null : step);
-                                  setSelected(null);
-                                  setPicker(null);
-                              }
-                    }
-                />
+            {!editor && (recordVisible || online) && (
+                <aside className="game-sidebar" aria-label="棋谱与对局操作">
+                    {recordVisible && (
+                        <RecordPanel
+                            record={G.record}
+                            step={reviewing ? reviewStep! : totalSteps}
+                            onSelect={
+                                !canReview
+                                    ? undefined
+                                    : (step) => {
+                                          setReviewStep(step === totalSteps ? null : step);
+                                          setSelected(null);
+                                          setPicker(null);
+                                      }
+                            }
+                        />
+                    )}
+                    {online && (
+                        <OnlineControls
+                            status={status}
+                            waiting={waiting}
+                            finished={!!winner}
+                            connected={!!isConnected}
+                            canRequest={
+                                !!isConnected &&
+                                !!opponent?.isConnected &&
+                                !ctx.gameover &&
+                                !!takebackSteps(G, ctx.currentPlayer, online.playerID)
+                            }
+                            playerID={online.playerID}
+                            pending={pendingTakeback}
+                            steps={totalSteps}
+                            now={now}
+                            onRequest={() => moves.requestTakeback()}
+                            onRespond={(id, accept) => moves.respondTakeback(id, accept)}
+                            onInvite={share}
+                            onExport={() => downloadRecord(G, ctx.currentPlayer)}
+                            onLobby={() => onReturnLobby?.()}
+                        />
+                    )}
+                </aside>
             )}
         </main>
     );
@@ -1034,7 +999,7 @@ function GameApp() {
                 onOpenOnline={returnToLobby}
                 onReturnLobby={returnToLobby}
                 onApplyPosition={() => {}}
-                recordVisible={recordVisible}
+                recordVisible={true}
                 onRecordVisibleChange={setRecordVisible}
                 soundEnabled={soundEnabled}
                 onSoundEnabledChange={setSoundEnabled}
