@@ -918,3 +918,42 @@ i {
         grid-row: 6;
     }
 }
+
+.computer-dialog {
+    width: 380px;
+    box-sizing: border-box;
+}
+.computer-side {
+    border: 0;
+    padding: 0;
+    margin: 24px 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    font-size: 14px;
+}
+.computer-side legend {
+    margin-bottom: 12px;
+}
+.computer-side label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 14px 6px;
+    border: 1px solid #c9bdab;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.computer-side label:has(:checked) {
+    background: #e8decd;
+    border-color: #99856b;
+}
+.computer-side input {
+    margin: 0;
+    accent-color: #917756;
+}
+.computer-side label:has(:focus-visible) {
+    outline: 2px solid #917756;
+    outline-offset: 2px;
+}

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useComputer } from '@/ai/use-computer';
+import { useWebMCP } from '@/ai/use-webmcp';
 import { flushSync } from 'react-dom';
 import { Client, type BoardProps } from 'boardgame.io/react';
 import { SocketIO } from 'boardgame.io/multiplayer';
@@ -45,6 +47,9 @@ const hints: Record<Kind, string> = {
 
 interface GameBoardProps extends BoardProps<GameState> {
     online?: RoomSession;
+    computerSide?: Side | null;
+    onComputerMode?: (hasMoves: boolean) => void;
+    onLocalMode?: (hasMoves: boolean) => void;
     archive?: boolean;
     autoInvite?: boolean;
     playStart?: boolean;
@@ -71,6 +76,9 @@ function GameBoard({
     matchData,
     playerID,
     online,
+    computerSide,
+    onComputerMode,
+    onLocalMode,
     archive = false,
     autoInvite = false,
     playStart = false,
@@ -131,6 +139,7 @@ function GameBoard({
     const pendingTakeback = online && G.takeback && G.takeback.expiresAt > now ? G.takeback : null;
     const canPlay =
         !archive &&
+        (!computerSide || playerSide(ctx.currentPlayer) !== computerSide) &&
         !(pendingTakeback && pendingTakeback.playerID === playerID) &&
         (!online ||
             (!!isConnected &&
@@ -163,6 +172,32 @@ function GameBoard({
         () => (reviewing && G.record ? new GameRecord(G.record).stateAt(reviewStep!) : G),
         [G, reviewing, reviewStep],
     );
+    const computerMove = useCallback((from: number, to: number) => moves.move(from, to), [moves]);
+    const computer = useComputer(
+        G,
+        playerSide(ctx.currentPlayer),
+        !!computerSide &&
+            playerSide(ctx.currentPlayer) === computerSide &&
+            !draft &&
+            !reviewing &&
+            !winner,
+        computerMove,
+    );
+    useWebMCP(
+        {
+            game: G,
+            side: playerSide(ctx.currentPlayer),
+            human: computerSide ? Side.opposite(computerSide) : Side.Red,
+            enabled: !!computerSide && !online && !archive,
+            canMove: canPlay && !draft && !reviewing && !ctx.gameover && !computer.draw,
+            winner,
+            draw: computer.draw,
+        },
+        (from, to) => {
+            moves.move(from, to);
+            setSelected(null);
+        },
+    );
     const editor = draft ? new PositionEditor(draft) : null;
     const game = new Game(displayed);
     const board = draft ?? displayed.board;
@@ -172,11 +207,21 @@ function GameBoard({
             ? (G.record.moves[reviewStep!]?.side ?? playerSide(ctx.currentPlayer))
             : playerSide(ctx.currentPlayer);
     const destinations =
-        editor || reviewing || winner || !canPlay || selected === null
+        editor ||
+        reviewing ||
+        winner ||
+        (computerSide && computer.draw) ||
+        !canPlay ||
+        selected === null
             ? []
             : game.findLegalMoves(selected);
     const forbiddenDestinations =
-        editor || reviewing || winner || !canPlay || selected === null
+        editor ||
+        reviewing ||
+        winner ||
+        (computerSide && computer.draw) ||
+        !canPlay ||
+        selected === null
             ? []
             : game.findForbiddenMoves(selected);
     const isCheck = !editor && (reviewing || !winner) && game.isCheck(side);
@@ -196,7 +241,11 @@ function GameBoard({
             : playStart
               ? 'local'
               : undefined,
-        online ? playerSide(online.playerID) : Side.Red,
+        online
+            ? playerSide(online.playerID)
+            : computerSide
+              ? Side.opposite(computerSide)
+              : Side.Red,
     );
     const sideName = (value: string) => (value === Side.Red ? '红方' : '黑方');
     const status = editor
@@ -211,7 +260,11 @@ function GameBoard({
                 ? `第 ${reviewStep} 步`
                 : winner
                   ? `${sideName(winner)}胜`
-                  : `${sideName(side)}行棋${isCheck ? ' · 将军' : ''}`;
+                  : computerSide && computer.draw
+                    ? '和棋 · 三次重复局面'
+                    : computerSide && side === computerSide
+                      ? computer.error || '电脑思考中…'
+                      : `${sideName(side)}行棋${isCheck ? ' · 将军' : ''}`;
 
     useEffect(() => {
         const update = () => setFullscreen(!!document.fullscreenElement);
@@ -263,13 +316,24 @@ function GameBoard({
                 soundEnabled,
                 volume,
                 recordVisible,
+                computerSide: computerSide ?? null,
             });
 
         persist();
         window.addEventListener('pagehide', persist);
 
         return () => window.removeEventListener('pagehide', persist);
-    }, [G, ctx.currentPlayer, draft, soundEnabled, volume, recordVisible, online, archive]);
+    }, [
+        G,
+        ctx.currentPlayer,
+        draft,
+        soundEnabled,
+        volume,
+        recordVisible,
+        online,
+        archive,
+        computerSide,
+    ]);
 
     useEffect(() => {
         if (picker === null) return;
@@ -369,7 +433,14 @@ function GameBoard({
             return;
         }
 
-        if (!canPlay || reviewing || winner || unavailablePieces.includes(index)) return;
+        if (
+            !canPlay ||
+            reviewing ||
+            winner ||
+            (computerSide && computer.draw) ||
+            unavailablePieces.includes(index)
+        )
+            return;
 
         if (index === selected) {
             setSelected(null);
@@ -447,7 +518,9 @@ function GameBoard({
                                 ? `联机对弈 · 执${online.playerID === '0' ? '红' : '黑'}`
                                 : archive
                                   ? '历史对局 · 复盘'
-                                  : '十三路 · 同屏对弈'}
+                                  : computerSide
+                                    ? `人机对战 · 执${computerSide === Side.Black ? '红' : '黑'}`
+                                    : '十三路 · 同屏对弈'}
                         </small>
                     </h1>
                 </div>
@@ -483,6 +556,14 @@ function GameBoard({
                     <button className="ui-button" popoverTarget="game-menu">
                         菜单
                     </button>
+                    {onComputerMode && !editor && (
+                        <button
+                            className="ui-button"
+                            onClick={() => onComputerMode(totalSteps > 0)}
+                        >
+                            人机
+                        </button>
+                    )}
                     {!online && !editor && (
                         <button className="ui-button primary" onClick={onOpenOnline}>
                             联机
@@ -545,6 +626,16 @@ function GameBoard({
                                 >
                                     新局
                                 </button>
+                                {computerSide && onLocalMode && (
+                                    <button
+                                        onClick={() => {
+                                            menu.current?.hidePopover();
+                                            onLocalMode(totalSteps > 0);
+                                        }}
+                                    >
+                                        切换双人
+                                    </button>
+                                )}
                             </>
                         )}
                     </div>
@@ -725,7 +816,7 @@ function GameBoard({
                 </dialog>
             )}
             <BoardView
-                flipped={online?.playerID === '1'}
+                flipped={online?.playerID === '1' || computerSide === Side.Red}
                 players={
                     online
                         ? {
@@ -757,7 +848,10 @@ function GameBoard({
                           )
                         : -1
                 }
-                disabled={!editor && (reviewing || !!winner || !canPlay)}
+                disabled={
+                    !editor &&
+                    (reviewing || !!winner || !!(computerSide && computer.draw) || !canPlay)
+                }
                 animationState={displayed}
                 animationStep={reviewing ? reviewStep! : totalSteps}
                 animateMoves={!editor}
@@ -776,6 +870,11 @@ function GameBoard({
                     <div className={`status ${winner ?? side}`} role="status">
                         <i />
                         {status}
+                        {computerSide && computer.error && !editor && !reviewing && (
+                            <button className="ui-button" onClick={computer.retry}>
+                                重试
+                            </button>
+                        )}
                     </div>
                 )}
                 {!editor && !reviewing && (
@@ -838,6 +937,20 @@ function GameBoard({
 
 function LocalGame({ onOpenOnline }: { onOpenOnline: () => void }) {
     const [saved, setSaved] = useState(loadSession);
+    const [computerSide, setComputerSide] = useState<Side | null>(saved?.computerSide ?? null);
+    const modeDialog = useRef<HTMLDialogElement>(null);
+    const [lastComputerSide, setLastComputerSide] = useState(saved?.computerSide ?? Side.Black);
+    const [chosenSide, setChosenSide] = useState<Side | null>(lastComputerSide);
+    const [replacingGame, setReplacingGame] = useState(false);
+
+    function startMode(side: Side | null) {
+        setComputerSide(side);
+        if (side) setLastComputerSide(side);
+        setPlayStart(true);
+        setInitialReview(false);
+        setPosition(new Board().data);
+        modeDialog.current?.close();
+    }
     const [initialReview, setInitialReview] = useState(false);
     const [position, setPosition] = useState<BoardData | null>(null);
     const [playStart, setPlayStart] = useState(false);
@@ -860,42 +973,93 @@ function LocalGame({ onOpenOnline }: { onOpenOnline: () => void }) {
     );
 
     return (
-        <GameClient
-            onOpenOnline={onOpenOnline}
-            initialReview={initialReview}
-            onImportRecord={(record) => {
-                setPlayStart(false);
-                setInitialReview(true);
-                setPosition(null);
-                setRecordVisible(true);
-                setSaved({
-                    ...record,
-                    version: 1,
-                    draft: null,
-                    soundEnabled,
-                    volume,
-                    recordVisible: true,
-                });
-            }}
-            initialDraft={position ? null : (saved?.draft ?? null)}
-            recordVisible={recordVisible}
-            onRecordVisibleChange={setRecordVisible}
-            playStart={playStart}
-            onNewGame={() => {
-                setPlayStart(true);
-                setInitialReview(false);
-                setPosition(new Board().data);
-            }}
-            onApplyPosition={(board) => {
-                setPlayStart(false);
-                setInitialReview(false);
-                setPosition(board);
-            }}
-            volume={volume}
-            onVolumeChange={setVolume}
-            soundEnabled={soundEnabled}
-            onSoundEnabledChange={setSoundEnabled}
-        />
+        <>
+            <dialog
+                ref={modeDialog}
+                className="reset-dialog computer-dialog"
+                aria-labelledby="computer-title"
+            >
+                <h2 id="computer-title">{chosenSide ? '人机对战' : '切换双人'}</h2>
+                {chosenSide && (
+                    <fieldset className="computer-side">
+                        <legend>选择阵营</legend>
+                        {([Side.Black, Side.Red] as const).map((side) => (
+                            <label key={side}>
+                                <input
+                                    type="radio"
+                                    name="computer-side"
+                                    checked={chosenSide === side}
+                                    onChange={() => setChosenSide(side)}
+                                />
+                                <span>{side === Side.Black ? '执红（先手）' : '执黑（后手）'}</span>
+                            </label>
+                        ))}
+                    </fieldset>
+                )}
+                {replacingGame && <p>开始后将替换当前对局。</p>}
+                <div>
+                    <button className="ui-button quiet" onClick={() => modeDialog.current?.close()}>
+                        取消
+                    </button>
+                    <button className="ui-button primary" onClick={() => startMode(chosenSide)}>
+                        开始对弈
+                    </button>
+                </div>
+            </dialog>
+            <GameClient
+                computerSide={computerSide}
+                onComputerMode={(hasMoves) => {
+                    setChosenSide(lastComputerSide);
+                    setReplacingGame(hasMoves);
+                    modeDialog.current?.showModal();
+                }}
+                onLocalMode={(hasMoves) => {
+                    if (!hasMoves) {
+                        startMode(null);
+                        return;
+                    }
+
+                    setChosenSide(null);
+                    setReplacingGame(true);
+                    modeDialog.current?.showModal();
+                }}
+                onOpenOnline={onOpenOnline}
+                initialReview={initialReview}
+                onImportRecord={(record) => {
+                    setComputerSide(null);
+                    setPlayStart(false);
+                    setInitialReview(true);
+                    setPosition(null);
+                    setRecordVisible(true);
+                    setSaved({
+                        ...record,
+                        version: 1,
+                        draft: null,
+                        soundEnabled,
+                        volume,
+                        recordVisible: true,
+                    });
+                }}
+                initialDraft={position ? null : (saved?.draft ?? null)}
+                recordVisible={recordVisible}
+                onRecordVisibleChange={setRecordVisible}
+                playStart={playStart}
+                onNewGame={() => {
+                    setPlayStart(true);
+                    setInitialReview(false);
+                    setPosition(new Board().data);
+                }}
+                onApplyPosition={(board) => {
+                    setPlayStart(false);
+                    setInitialReview(false);
+                    setPosition(board);
+                }}
+                volume={volume}
+                onVolumeChange={setVolume}
+                soundEnabled={soundEnabled}
+                onSoundEnabledChange={setSoundEnabled}
+            />
+        </>
     );
 }
 

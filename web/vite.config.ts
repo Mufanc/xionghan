@@ -32,7 +32,7 @@ export default defineConfig({
                 ],
             },
             workbox: {
-                globPatterns: ['**/*.{html,js,css,png,svg,ttf,ogg}'],
+                globPatterns: ['**/*.{html,js,css,png,svg,ttf,ogg,wasm}'],
                 navigateFallbackDenylist: [/\?[^#]*__recover=/, /&__recover=/],
                 // 仅在用户点击更新后激活新版，避免自动刷新正在进行的对局。
                 skipWaiting: false,

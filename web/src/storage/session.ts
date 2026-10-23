@@ -5,6 +5,7 @@ import { Kind, Piece, Side } from '@xionghan/core/piece';
 
 export interface SavedSession {
     version: 1;
+    computerSide?: Side | null;
     game: GameState;
     currentPlayer: '0' | '1';
     draft: BoardData | null;
@@ -53,6 +54,9 @@ export function parseSession(text: string): SavedSession | null {
         if (
             !saved ||
             saved.version !== 1 ||
+            (saved.computerSide !== undefined &&
+                saved.computerSide !== null &&
+                !isSide(saved.computerSide)) ||
             !['0', '1'].includes(saved.currentPlayer) ||
             typeof saved.soundEnabled !== 'boolean' ||
             (saved.volume !== undefined &&
