@@ -32,6 +32,7 @@ it('keeps one title and two buttons when a request arrives', () => {
         expect(html.match(/<h2/g)).toHaveLength(1);
         expect(html).not.toContain('class="online-message"');
         expect(html.match(/<button/g)).toHaveLength(2);
+        expect(html).not.toContain('ui-button quiet');
     }
     expect(normal).toContain('悔棋');
     expect(incoming).toContain('对方申请悔棋');

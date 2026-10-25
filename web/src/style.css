@@ -95,6 +95,13 @@ h1 small {
 }
 .view-controls {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 16px;
+}
+.action-group {
+    display: flex;
     align-items: center;
     gap: 8px;
 }
@@ -425,6 +432,9 @@ i {
         font-size: 12px;
     }
     .view-controls {
+        gap: 8px;
+    }
+    .action-group {
         gap: 2px;
     }
 }

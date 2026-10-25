@@ -73,7 +73,7 @@ export function OnlineControls(props: OnlineControlsProps) {
                             同意
                         </button>
                         <button
-                            className="ui-button quiet"
+                            className="ui-button"
                             disabled={!props.connected}
                             onClick={() => props.onRespond(pending.id, false)}
                         >
@@ -103,7 +103,7 @@ export function OnlineControls(props: OnlineControlsProps) {
                                     ? '导出棋谱'
                                     : '悔棋'}
                         </button>
-                        <button className="ui-button quiet" onClick={props.onLobby}>
+                        <button className="ui-button" onClick={props.onLobby}>
                             返回大厅
                         </button>
                     </>

@@ -9,6 +9,7 @@ import { Rooms, invitationURL, type RoomSession } from '@/online/rooms';
 import { onlineGameConfig, takebackSteps } from '@xionghan/core/online';
 import { BoardView } from '@/components/BoardView';
 import { PiecePicker } from '@/components/PiecePicker';
+import { GameActions, type GameAction } from '@/components/GameActions';
 import { OnlineControls } from '@/components/OnlineControls';
 import { RecordPanel } from '@/components/RecordPanel';
 import { UpdateNotice } from '@/components/UpdateNotice';
@@ -503,6 +504,117 @@ function GameBoard({
         }
     }
 
+    const actions: GameAction[] = [
+        {
+            id: 'clear-board',
+            group: 'edit-tools',
+            label: '清空',
+            placement: editor ? 'toolbar' : 'hidden',
+            onClick: () => {
+                if (!editor) return;
+
+                editor.clear();
+                setDraft(editor.data);
+                setSelected(null);
+                setPicker(null);
+            },
+        },
+        {
+            id: 'default-board',
+            group: 'edit-tools',
+            label: '默认',
+            placement: editor ? 'toolbar' : 'hidden',
+            onClick: () => {
+                if (!editor) return;
+
+                editor.reset();
+                setDraft(editor.data);
+                setSelected(null);
+                setPicker(null);
+            },
+        },
+        {
+            id: 'cancel-edit',
+            group: 'edit-confirm',
+            label: '取消',
+            placement: editor ? 'toolbar' : 'hidden',
+            onClick: () => transitionLayout(cancelEdit),
+        },
+        {
+            id: 'start-edit',
+            group: 'edit-confirm',
+            label: '完成',
+            disabled: !editor?.canStart(),
+            emphasis: 'primary',
+            placement: editor ? 'toolbar' : 'hidden',
+            onClick: saveEdit,
+        },
+        {
+            id: 'record',
+            label: '棋谱',
+            pressed: recordVisible,
+            placement: !editor && !online ? 'toolbar' : 'hidden',
+            onClick: () =>
+                transitionLayout(() => {
+                    onRecordVisibleChange(!recordVisible);
+                    setReviewStep(null);
+                    setSelected(null);
+                }),
+        },
+        {
+            id: 'computer',
+            label: '人机',
+            placement: onComputerMode && !editor ? 'toolbar' : 'hidden',
+            onClick: () => onComputerMode?.(totalSteps > 0),
+        },
+        {
+            id: 'online',
+            label: '联机',
+            emphasis: 'primary',
+            placement: !online && !editor ? 'toolbar' : 'hidden',
+            onClick: onOpenOnline,
+        },
+        {
+            id: 'lobby',
+            label: '返回大厅',
+            placement: !online && archive ? 'menu' : 'hidden',
+            onClick: () => onReturnLobby?.(),
+        },
+        {
+            id: 'edit',
+            label: '摆子',
+            disabled: reviewing,
+            placement: !online && !archive && !editor ? 'menu' : 'hidden',
+            onClick: () => transitionLayout(beginEdit),
+        },
+        {
+            id: 'new-game',
+            label: '新局',
+            placement: !online && !archive && !editor ? 'menu' : 'hidden',
+            onClick: newGame,
+        },
+        {
+            id: 'local',
+            label: '切换双人',
+            placement:
+                !online && !archive && !editor && computerSide && onLocalMode ? 'menu' : 'hidden',
+            onClick: () => onLocalMode?.(totalSteps > 0),
+        },
+        {
+            id: 'export',
+            label: '导出棋谱',
+            placement: !editor ? 'menu' : 'hidden',
+            onClick: () => downloadRecord(G, ctx.currentPlayer),
+        },
+        {
+            id: 'import',
+            label: '导入棋谱',
+            disabled: readingRecord,
+            placement: !editor && onImportRecord ? 'menu' : 'hidden',
+            onClick: () => recordInput.current?.click(),
+        },
+    ];
+
     return (
         <main
             className={`game${online ? ' online' : ''}${editor ? ' editing' : ''}${!recordVisible ? ' record-hidden' : ''}`}
@@ -526,50 +638,10 @@ function GameBoard({
                     </h1>
                 </div>
                 <nav className="view-controls" aria-label={editor ? '摆子操作' : '对局操作'}>
-                    {editor ? (
-                        <>
-                            <button
-                                className="ui-button quiet"
-                                onClick={() => transitionLayout(cancelEdit)}
-                            >
-                                取消
-                            </button>
-                            <button className="ui-button primary" onClick={saveEdit}>
-                                开始对弈
-                            </button>
-                        </>
-                    ) : !online ? (
-                        <button
-                            className="ui-button"
-                            aria-pressed={recordVisible}
-                            onClick={() => {
-                                transitionLayout(() => {
-                                    onRecordVisibleChange(!recordVisible);
-                                    setReviewStep(null);
-                                    setSelected(null);
-                                });
-                            }}
-                        >
-                            <span className="toggle-dot" aria-hidden="true" />
-                            棋谱
-                        </button>
-                    ) : null}
+                    <GameActions actions={actions} placement="toolbar" />
                     <button className="ui-button" popoverTarget="game-menu">
                         菜单
                     </button>
-                    {onComputerMode && !editor && (
-                        <button
-                            className="ui-button"
-                            onClick={() => onComputerMode(totalSteps > 0)}
-                        >
-                            人机
-                        </button>
-                    )}
-                    {!online && !editor && (
-                        <button className="ui-button primary" onClick={onOpenOnline}>
-                            联机
-                        </button>
-                    )}
                 </nav>
             </header>
             <div
@@ -579,91 +651,11 @@ function GameBoard({
                 ref={menu}
                 aria-label="操作菜单"
             >
-                {!online && (
-                    <div className="menu-group">
-                        {archive ? (
-                            <button onClick={onReturnLobby}>返回大厅</button>
-                        ) : editor ? (
-                            <>
-                                <button
-                                    onClick={() => {
-                                        editor.clear();
-                                        setDraft(editor.data);
-                                        setSelected(null);
-                                        setPicker(null);
-                                        menu.current?.hidePopover();
-                                    }}
-                                >
-                                    清空棋盘
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        editor.reset();
-                                        setDraft(editor.data);
-                                        setSelected(null);
-                                        setPicker(null);
-                                        menu.current?.hidePopover();
-                                    }}
-                                >
-                                    默认布局
-                                </button>
-                            </>
-                        ) : (
-                            <>
-                                <button
-                                    disabled={reviewing}
-                                    onClick={() => {
-                                        menu.current?.hidePopover();
-                                        transitionLayout(beginEdit);
-                                    }}
-                                >
-                                    摆子
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        menu.current?.hidePopover();
-                                        newGame();
-                                    }}
-                                >
-                                    新局
-                                </button>
-                                {computerSide && onLocalMode && (
-                                    <button
-                                        onClick={() => {
-                                            menu.current?.hidePopover();
-                                            onLocalMode(totalSteps > 0);
-                                        }}
-                                    >
-                                        切换双人
-                                    </button>
-                                )}
-                            </>
-                        )}
-                    </div>
-                )}
-                {!editor && (
-                    <div className="menu-group">
-                        <button
-                            onClick={() => {
-                                menu.current?.hidePopover();
-                                downloadRecord(G, ctx.currentPlayer);
-                            }}
-                        >
-                            导出棋谱
-                        </button>
-                        {onImportRecord && (
-                            <button
-                                disabled={readingRecord}
-                                onClick={() => {
-                                    menu.current?.hidePopover();
-                                    recordInput.current?.click();
-                                }}
-                            >
-                                导入棋谱
-                            </button>
-                        )}
-                    </div>
-                )}
+                <GameActions
+                    actions={actions}
+                    placement="menu"
+                    onBeforeAction={() => menu.current?.hidePopover()}
+                />
                 <div className="menu-group">
                     <button
                         className="sound-toggle"
