@@ -11,6 +11,7 @@ import { BoardView } from '@/components/BoardView';
 import { PiecePicker } from '@/components/PiecePicker';
 import { OnlineControls } from '@/components/OnlineControls';
 import { RecordPanel } from '@/components/RecordPanel';
+import { UpdateNotice } from '@/components/UpdateNotice';
 import { GameRecord } from '@xionghan/core/record';
 import { PositionEditor } from '@xionghan/core/editor';
 import {
@@ -1195,6 +1196,7 @@ export default function App() {
     return (
         <SkinProvider>
             <GameApp />
+            <UpdateNotice />
         </SkinProvider>
     );
 }

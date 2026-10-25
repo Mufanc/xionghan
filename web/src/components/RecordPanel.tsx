@@ -1,6 +1,5 @@
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useEffect, useRef } from 'react';
 import type { RecordData } from '@xionghan/core/record';
-import { useSkins } from '@/skins/SkinProvider';
 import { Side } from '@xionghan/core/piece';
 
 interface RecordPanelProps {
@@ -10,7 +9,6 @@ interface RecordPanelProps {
 }
 
 export function RecordPanel({ record, step, onSelect }: RecordPanelProps) {
-    const frame = useSkins()?.skin?.frameStyle('record');
     const list = useRef<HTMLDivElement>(null);
     const moves = record?.moves ?? [];
     const offset = moves[0]?.side === Side.Black ? 1 : 0;
@@ -32,22 +30,7 @@ export function RecordPanel({ record, step, onSelect }: RecordPanelProps) {
     }, [step]);
 
     return (
-        <section
-            className={`record-panel${frame ? ' skinned-record' : ''}`}
-            aria-label="棋谱"
-            style={
-                frame
-                    ? ({
-                          ...frame,
-                          '--record-background': frame.backgroundImage ?? 'none',
-                          '--record-border-image': frame.borderImageSource ?? 'none',
-                          '--record-slices': frame.borderImageSlice ?? '0',
-                          '--record-border-width': frame.borderImageWidth ?? '0',
-                          '--record-padding': frame.padding ?? '0px',
-                      } as CSSProperties)
-                    : undefined
-            }
-        >
+        <section className="record-panel" aria-label="棋谱">
             <h2>棋谱</h2>
             <div ref={list} className="record-list">
                 {Array.from({ length: rounds }, (_, round) => (

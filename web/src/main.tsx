@@ -20,6 +20,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <React.Suspense fallback={null}>
             <Page />
         </React.Suspense>
-        <UpdateNotice />
+        {showingRules && <UpdateNotice />}
     </React.StrictMode>,
 );

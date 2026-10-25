@@ -43,7 +43,7 @@ describe('skin ZIP loading', () => {
         expect(skin.pieceUrl({ side: Side.Red, kind: Kind.King })).toBe('blob:test');
         expect(skin.pieceUrl({ side: Side.Black, kind: Kind.King })).toBeUndefined();
         expect(skin.url('board.png')).toBe('blob:test');
-        expect(skin.frameStyle('panel')).toBeUndefined();
+        expect(skin.panelStyle()).toBeUndefined();
         expect(close).toHaveBeenCalledTimes(2);
         skin.dispose();
         skin.dispose();
@@ -60,7 +60,7 @@ describe('skin ZIP loading', () => {
         await expect(Skin.load(await zip({ 'board.png': png(4097) }))).rejects.toThrow('尺寸');
         expect(decode).not.toHaveBeenCalled();
     });
-    it('keeps record frames independent and prefers nine-patch over the plain image', async () => {
+    it('uses one shared panel, preferring panel nine-patch over plain and legacy frames', async () => {
         vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue({ close: vi.fn() }));
         let id = 0;
         vi.spyOn(URL, 'createObjectURL').mockImplementation(() => `blob:${++id}`);
@@ -83,16 +83,40 @@ describe('skin ZIP loading', () => {
             }),
         });
         const skin = await Skin.load(
-            await zip({ 'panel.png': png(), 'record.png': png(), 'record.9.png': png(6) }),
+            await zip({
+                'panel.png': png(),
+                'record.png': png(),
+                'record.9.png': png(6),
+                'panel.9.png': png(6),
+            }),
         );
-        expect(skin.frameStyle('panel')?.backgroundImage).toBe('url("blob:1")');
-        expect(skin.frameStyle('record')).toMatchObject({
-            borderImageSource: 'url("blob:3")',
-            borderImageSlice: '1 1 1 1 fill',
-            borderImageWidth: '1px 1px 1px 1px',
-            padding: '1px 1px 1px 1px',
+        expect(skin.panelStyle()).toMatchObject({
+            '--panel-background': 'none',
+            '--panel-border-image': 'url("blob:4")',
+            '--panel-slices': '1 1 1 1 fill',
+            '--panel-border-width': '1px 1px 1px 1px',
+            '--panel-top': '1px',
+            '--panel-right': '1px',
+            '--panel-bottom': '1px',
+            '--panel-left': '1px',
         });
         skin.dispose();
+    });
+
+    it('uses plain panels everywhere and falls back to legacy record images only when needed', async () => {
+        vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue({ close: vi.fn() }));
+        let id = 0;
+        vi.spyOn(URL, 'createObjectURL').mockImplementation(() => `blob:${++id}`);
+        const plain = await Skin.load(await zip({ 'record.png': png(), 'panel.png': png() }));
+        expect(plain.panelStyle()).toMatchObject({
+            '--panel-background': 'url("blob:2")',
+            '--panel-border-image': 'none',
+            '--panel-top': '0px',
+        });
+        plain.dispose();
+        const legacy = await Skin.load(await zip({ 'record.png': png() }));
+        expect(legacy.panelStyle()).toMatchObject({ '--panel-background': 'url("blob:3")' });
+        legacy.dispose();
     });
 
     it('requires properties and uses metadata identity independently of ZIP naming', async () => {

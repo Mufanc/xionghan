@@ -8,10 +8,10 @@
     gap: 20px;
     max-width: calc(100% - 32px);
     padding: 12px 14px;
-    border: 1px solid #c9bdab;
+    border: 1px solid var(--ui-border, #c9bdab);
     border-radius: 8px;
-    background: #f6f2e9;
-    color: #584a39;
+    background: var(--ui-surface, #f6f2e9);
+    color: var(--ui-text, #584a39);
     box-shadow: 0 8px 28px #55452a26;
     font-size: 13px;
 }

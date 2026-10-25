@@ -2,7 +2,7 @@
     width: min(100%, 1040px);
     margin: auto;
     padding: 28px 20px;
-    color: #584a39;
+    color: var(--ui-text, #584a39);
 }
 .room-header {
     display: flex;
@@ -13,9 +13,9 @@
 }
 .room-card {
     padding: 24px;
-    border: 1px solid #c9bdab;
+    border: 1px solid var(--ui-border, #c9bdab);
     border-radius: 8px;
-    background: #f6f2e9;
+    background: var(--ui-surface, #f6f2e9);
     box-shadow: 0 8px 28px #55452a12;
 }
 .room-card h2 {
@@ -24,7 +24,7 @@
     font-weight: 600;
 }
 .room-card p {
-    color: #817767;
+    color: var(--ui-muted, #817767);
     font-size: 13px;
     line-height: 1.7;
 }
@@ -39,14 +39,14 @@
     width: 100%;
     min-width: 0;
     padding: 12px;
-    background: #fffaf2;
-    border: 1px solid #c9bdab;
+    background: var(--ui-surface, #fffaf2);
+    border: 1px solid var(--ui-border, #c9bdab);
     border-radius: 5px;
     font: inherit;
     color: inherit;
 }
 .room-field input:focus {
-    outline: 2px solid #aa9579;
+    outline: 2px solid var(--ui-accent, #aa9579);
     outline-offset: 2px;
 }
 .room-side {
@@ -66,12 +66,12 @@
     align-items: center;
 }
 .room-side input {
-    accent-color: #917756;
+    accent-color: var(--ui-accent, #917756);
 }
 .room-join {
     margin-top: 28px;
     padding-top: 4px;
-    border-top: 1px solid #ded6c9;
+    border-top: 1px solid var(--ui-border, #ded6c9);
 }
 .room-seats {
     display: grid;
@@ -84,7 +84,7 @@
     flex-direction: column;
     gap: 10px;
     padding: 16px;
-    background: #ede8de;
+    background: var(--ui-hover, #ede8de);
     border-radius: 5px;
     font-size: 13px;
 }
@@ -101,8 +101,8 @@
 .share-dialog input {
     width: 100%;
     padding: 10px;
-    border: 1px solid #c9bdab;
-    background: #fffaf2;
+    border: 1px solid var(--ui-border, #c9bdab);
+    background: var(--ui-surface, #fffaf2);
     color: inherit;
     border-radius: 4px;
 }
@@ -134,7 +134,7 @@
     justify-content: space-between;
     gap: 16px;
     padding: 20px 0;
-    border-top: 1px solid #ded6c9;
+    border-top: 1px solid var(--ui-border, #ded6c9);
 }
 .room-list-item > div {
     display: grid;
@@ -165,7 +165,7 @@
     margin: 24px 0 12px;
     font-size: 14px;
     font-weight: 500;
-    color: #817767;
+    color: var(--ui-muted, #817767);
 }
 .room-list-item .room-history-actions {
     display: flex;

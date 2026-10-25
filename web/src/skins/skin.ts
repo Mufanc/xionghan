@@ -41,22 +41,25 @@ export class Skin {
         return this.urls.get(filename);
     }
 
-    frameStyle(name: 'panel' | 'record'): CSSProperties | undefined {
+    panelStyle(): CSSProperties | undefined {
+        const name = this.url('panel.9.png') || this.url('panel.png') ? 'panel' : 'record';
         const patch = this.patches.get(`${name}.9.png`);
         const image = this.url(patch ? `${name}.9.png` : `${name}.png`);
 
         if (!image) return undefined;
-        if (!patch) return { backgroundImage: `url("${image}")`, backgroundSize: '100% 100%' };
 
         return {
-            border: '0 solid transparent',
-            borderRadius: 0,
-            background: 'transparent',
-            borderImageSource: `url("${image}")`,
-            borderImageSlice: `${patch.slices.join(' ')} fill`,
-            borderImageWidth: patch.slices.map((value) => `${value}px`).join(' '),
-            padding: patch.padding.map((value) => `${value}px`).join(' '),
-        };
+            '--panel-background': patch ? 'none' : `url("${image}")`,
+            '--panel-border-image': patch ? `url("${image}")` : 'none',
+            '--panel-slices': patch ? `${patch.slices.join(' ')} fill` : '0',
+            '--panel-border-width': patch
+                ? patch.slices.map((value) => `${value}px`).join(' ')
+                : '0',
+            '--panel-top': `${patch?.padding[0] ?? 0}px`,
+            '--panel-right': `${patch?.padding[1] ?? 0}px`,
+            '--panel-bottom': `${patch?.padding[2] ?? 0}px`,
+            '--panel-left': `${patch?.padding[3] ?? 0}px`,
+        } as CSSProperties;
     }
 
     dispose(): void {

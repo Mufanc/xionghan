@@ -1,5 +1,6 @@
 .skin-surface {
     min-height: 100dvh;
+    color: var(--ui-text, #34352e);
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
@@ -16,10 +17,10 @@
     width: min(420px, calc(100% - 24px));
     max-height: calc(100dvh - 32px);
     padding: 20px;
-    border: 1px solid #c9bdab;
+    border: 1px solid var(--ui-border, #c9bdab);
     border-radius: 8px;
-    background: #f6f2e9;
-    color: #584a39;
+    background: var(--ui-surface, #f6f2e9);
+    color: var(--ui-text, #584a39);
     box-shadow: 0 12px 36px #332b2526;
 }
 .skin-dialog::backdrop {
@@ -47,7 +48,7 @@
     padding-block: 8px;
 }
 .skin-row + .skin-row {
-    border-top: 1px solid #e2dbce;
+    border-top: 1px solid var(--ui-border, #e2dbce);
 }
 .skin-row > .skin-option {
     flex: 1;
@@ -78,11 +79,11 @@
     overflow-wrap: anywhere;
 }
 .skin-option[aria-pressed='true'] {
-    background: #9177560f;
-    box-shadow: inset 2px 0 #917756;
+    background: var(--ui-selection, #9177560f);
+    box-shadow: inset 2px 0 var(--ui-accent, #917756);
 }
 .skin-option:hover:not(:disabled) {
-    background: #91775617;
+    background: var(--ui-hover, #91775617);
 }
 .skin-option:disabled {
     cursor: progress;
@@ -91,20 +92,20 @@
     margin: 8px 0;
     min-height: 18px;
     font-size: 12px;
-    color: #7c786e;
+    color: var(--ui-muted, #7c786e);
 }
 .skin-dialog footer {
     margin-top: 16px;
-    border-top: 1px solid #ded6c9;
+    border-top: 1px solid var(--ui-border, #ded6c9);
     padding-top: 12px;
 }
 .skin-dialog footer > span {
     font-size: 11px;
-    color: #8b8070;
+    color: var(--ui-muted, #8b8070);
 }
 
 .skin-dialog.drag-over {
-    outline: 2px dashed #917756;
+    outline: 2px dashed var(--ui-accent, #917756);
     outline-offset: -7px;
 }
 
@@ -112,28 +113,53 @@ img.board-art {
     object-fit: fill;
 }
 
-.skinned-record .record-round:nth-child(even) {
-    background: #584a3909;
+/* All UI containers share one skin surface, including native top-layer dialogs/popovers. */
+.skinned-panels
+    :is(
+        .record-panel,
+        .online-controls,
+        .game-menu,
+        .reset-dialog,
+        .skin-dialog,
+        .piece-picker,
+        .room-card
+    ) {
+    border: 0 solid transparent;
+    border-radius: 0;
+    background: var(--ui-surface, transparent) var(--panel-background) center / 100% 100%;
+    border-image-source: var(--panel-border-image);
+    border-image-slice: var(--panel-slices);
+    border-image-width: var(--panel-border-width);
+    padding: max(var(--panel-top), var(--surface-padding, 8px))
+        max(var(--panel-right), var(--surface-padding, 8px))
+        max(var(--panel-bottom), var(--surface-padding, 8px))
+        max(var(--panel-left), var(--surface-padding, 8px));
 }
-.skinned-record .record-list button[aria-current='step'] {
-    background: #91775633;
+.skinned-panels .record-panel {
+    --surface-padding: 0px;
 }
-.skinned-record h2,
-.skinned-record .record-controls {
-    border-color: #91775640;
+.skinned-panels .online-controls {
+    --surface-padding: 16px;
+}
+.skinned-panels :is(.reset-dialog, .room-card) {
+    --surface-padding: 24px;
+}
+.skinned-panels .update-notice {
+    --surface-padding: 12px;
+}
+.skinned-panels .skin-dialog {
+    --surface-padding: 20px;
 }
 @media (max-width: 850px) {
-    .skinned-record .record-list,
-    .skinned-record .record-controls {
+    .skinned-panels .record-panel :is(.record-list, .record-controls) {
         border: 0 solid transparent;
         border-radius: 0;
-        background: transparent;
-        background-image: var(--record-background);
-        background-size: 100% 100%;
-        border-image-source: var(--record-border-image);
-        border-image-slice: var(--record-slices);
-        border-image-width: var(--record-border-width);
-        padding: var(--record-padding);
+        background: var(--ui-surface, transparent) var(--panel-background) center / 100% 100%;
+        border-image-source: var(--panel-border-image);
+        border-image-slice: var(--panel-slices);
+        border-image-width: var(--panel-border-width);
+        padding: max(var(--panel-top), 8px) max(var(--panel-right), 8px)
+            max(var(--panel-bottom), 8px) max(var(--panel-left), 8px);
     }
 }
 
@@ -154,11 +180,11 @@ img.board-art {
 }
 .skin-version {
     padding: 0 5px;
-    border: 1px solid #d7cdbc;
+    border: 1px solid var(--ui-border, #d7cdbc);
     border-radius: 3px;
     font-size: 10px;
     font-weight: 400;
-    color: #8b8070;
+    color: var(--ui-muted, #8b8070);
     white-space: nowrap;
 }
 .skin-caption {
@@ -168,12 +194,12 @@ img.board-art {
     overflow: hidden;
     font-size: 11px;
     line-height: 1.6;
-    color: #8b8070;
+    color: var(--ui-muted, #8b8070);
 }
 .skin-check {
     flex: 0 0 12px;
     font-size: 12px;
-    color: #917756;
+    color: var(--ui-accent, #917756);
 }
 .skin-row .skin-option {
     align-items: center;

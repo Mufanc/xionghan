@@ -146,6 +146,10 @@ export function SkinProvider({ children }: { children: ReactNode }) {
     }
 
     const background = skin?.url('background.png');
+    const panel = skin?.panelStyle();
+    const colors = Object.fromEntries(
+        Object.entries(skin?.metadata.colors ?? {}).map(([name, value]) => [`--ui-${name}`, value]),
+    );
 
     return (
         <SkinContext
@@ -163,8 +167,12 @@ export function SkinProvider({ children }: { children: ReactNode }) {
             }}
         >
             <div
-                className="skin-surface"
-                style={background ? { backgroundImage: `url("${background}")` } : undefined}
+                className={`skin-surface${panel ? ' skinned-panels' : ''}`}
+                style={{
+                    ...panel,
+                    ...colors,
+                    backgroundImage: background ? `url("${background}")` : undefined,
+                }}
             >
                 {children}
                 {dialogOpen && <SkinDialog onClose={() => setDialogOpen(false)} />}
