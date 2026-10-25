@@ -139,7 +139,10 @@ function GameBoard({
     const waiting = !!online && !opponent?.name;
     const [now, setNow] = useState(Date.now);
     const pendingTakeback = online && G.takeback && G.takeback.expiresAt > now ? G.takeback : null;
+    const pendingDraw = online && G.drawOffer && G.drawOffer.expiresAt > now ? G.drawOffer : null;
+    const requestExpiresAt = Math.max(G.takeback?.expiresAt ?? 0, G.drawOffer?.expiresAt ?? 0);
     const canPlay =
+        !ctx.gameover &&
         !archive &&
         (!computerSide || playerSide(ctx.currentPlayer) !== computerSide) &&
         !(pendingTakeback && pendingTakeback.playerID === playerID) &&
@@ -150,17 +153,17 @@ function GameBoard({
                 !!opponent?.isConnected));
 
     useEffect(() => {
-        if (!G.takeback || !online) return;
+        if (!requestExpiresAt || !online) return;
 
         setNow(Date.now());
         const timer = setInterval(() => {
             const time = Date.now();
             setNow(time);
-            if (time >= G.takeback!.expiresAt) clearInterval(timer);
+            if (time >= requestExpiresAt) clearInterval(timer);
         }, 200);
 
         return () => clearInterval(timer);
-    }, [G.takeback, online]);
+    }, [requestExpiresAt, online]);
 
     useEffect(() => {
         setSelected(null);
@@ -260,13 +263,15 @@ function GameBoard({
               ? '等待对手重连'
               : reviewing
                 ? `第 ${reviewStep} 步`
-                : winner
-                  ? `${sideName(winner)}胜`
-                  : computerSide && computer.draw
-                    ? '和棋 · 三次重复局面'
-                    : computerSide && side === computerSide
-                      ? computer.error || '电脑思考中…'
-                      : `${sideName(side)}行棋${isCheck ? ' · 将军' : ''}`;
+                : ctx.gameover?.draw
+                  ? '和棋 · 双方同意'
+                  : winner
+                    ? `${sideName(winner)}胜`
+                    : computerSide && computer.draw
+                      ? '和棋 · 三次重复局面'
+                      : computerSide && side === computerSide
+                        ? computer.error || '电脑思考中…'
+                        : `${sideName(side)}行棋${isCheck ? ' · 将军' : ''}`;
 
     useEffect(() => {
         const update = () => setFullscreen(!!document.fullscreenElement);
@@ -603,7 +608,7 @@ function GameBoard({
         {
             id: 'export',
             label: '导出棋谱',
-            placement: !editor ? 'menu' : 'hidden',
+            placement: !editor && !online ? 'menu' : 'hidden',
             onClick: () => downloadRecord(G, ctx.currentPlayer),
         },
         {
@@ -903,16 +908,26 @@ function GameBoard({
                         <OnlineControls
                             status={status}
                             waiting={waiting}
-                            finished={!!winner}
+                            finished={!!ctx.gameover}
                             connected={!!isConnected}
                             canRequest={
                                 !!isConnected &&
                                 !!opponent?.isConnected &&
                                 !ctx.gameover &&
+                                !pendingDraw &&
                                 !!takebackSteps(G, ctx.currentPlayer, online.playerID)
                             }
                             playerID={online.playerID}
                             pending={pendingTakeback}
+                            drawOffer={pendingDraw}
+                            canOfferDraw={
+                                !!opponent?.isConnected &&
+                                !G.drawUsed?.[online.playerID] &&
+                                !ctx.gameover
+                            }
+                            onOfferDraw={() => moves.offerDraw()}
+                            onRespondDraw={(id, accept) => moves.respondDraw(id, accept)}
+                            onResign={() => moves.resign()}
                             steps={totalSteps}
                             now={now}
                             onRequest={() => moves.requestTakeback()}

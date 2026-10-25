@@ -28,6 +28,7 @@ export const onlineGameConfig: GameConfig<GameState> = {
     turn: { minMoves: 0, maxMoves: 1, activePlayers: ['0', '1'] },
     onEnd: ({ G }) => {
         delete G.takeback;
+        delete G.drawOffer;
     },
     moves: {
         move: {
@@ -51,6 +52,66 @@ export const onlineGameConfig: GameConfig<GameState> = {
 
                 if (G.takeback && G.takeback.expiresAt <= Date.now()) delete G.takeback;
                 if (G.takebackUsed) G.takebackUsed[playerID] = false;
+                if (G.drawUsed) G.drawUsed[playerID] = false;
+                if (G.drawOffer && G.drawOffer.expiresAt <= Date.now()) delete G.drawOffer;
+            },
+        },
+        resign: {
+            client: false,
+            noLimit: true,
+            move({ G, ctx, playerID, events }) {
+                if (
+                    ctx.gameover ||
+                    !['0', '1'].includes(playerID) ||
+                    (G.record?.moves.length ?? 0) < 2
+                )
+                    return INVALID_MOVE;
+
+                events.endGame({
+                    winner: playerSide(playerID === '0' ? '1' : '0'),
+                    reason: 'resign',
+                });
+            },
+        },
+        offerDraw: {
+            client: false,
+            noLimit: true,
+            move({ G, ctx, playerID }) {
+                if (
+                    ctx.gameover ||
+                    !['0', '1'].includes(playerID) ||
+                    (G.record?.moves.length ?? 0) < 2 ||
+                    G.drawUsed?.[playerID] ||
+                    (G.takeback && G.takeback.expiresAt > Date.now()) ||
+                    (G.drawOffer && G.drawOffer.expiresAt > Date.now())
+                )
+                    return INVALID_MOVE;
+
+                G.drawSerial = (G.drawSerial ?? 0) + 1;
+                G.drawOffer = { id: G.drawSerial, playerID, expiresAt: Date.now() + 10000 };
+                G.drawUsed ??= {};
+                G.drawUsed[playerID] = true;
+            },
+        },
+        respondDraw: {
+            client: false,
+            noLimit: true,
+            ignoreStaleStateID: true,
+            move({ G, playerID, events }, id: number, accept: boolean) {
+                const offer = G.drawOffer;
+
+                if (
+                    !offer ||
+                    offer.id !== id ||
+                    offer.playerID === playerID ||
+                    !['0', '1'].includes(playerID) ||
+                    typeof accept !== 'boolean' ||
+                    offer.expiresAt <= Date.now()
+                )
+                    return INVALID_MOVE;
+
+                delete G.drawOffer;
+                if (accept) events.endGame({ draw: true, reason: 'agreement' });
             },
         },
         requestTakeback: {
@@ -59,7 +120,11 @@ export const onlineGameConfig: GameConfig<GameState> = {
             move({ G, ctx, playerID }) {
                 const steps = takebackSteps(G, ctx.currentPlayer, playerID);
 
-                if (!steps || (G.takeback && G.takeback.expiresAt > Date.now()))
+                if (
+                    !steps ||
+                    (G.takeback && G.takeback.expiresAt > Date.now()) ||
+                    (G.drawOffer && G.drawOffer.expiresAt > Date.now())
+                )
                     return INVALID_MOVE;
 
                 G.takebackSerial = (G.takebackSerial ?? 0) + 1;

@@ -5,6 +5,9 @@ import type { RecordData } from './record.js';
 import type { Takeback } from './online.js';
 
 export interface GameState {
+    drawOffer?: { id: number; playerID: string; expiresAt: number };
+    drawSerial?: number;
+    drawUsed?: Record<string, boolean>;
     takeback?: Takeback;
     takebackUsed?: Record<string, boolean>;
     takebackSerial?: number;

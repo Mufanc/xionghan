@@ -349,7 +349,9 @@ export function RoomPage({ rooms, matchID, onEnter, onBack, onFind, onReview }: 
                                                 </strong>
                                                 <span>
                                                     {match.gameover
-                                                        ? `${match.gameover.winner === Side.Red ? '红方' : '黑方'}胜`
+                                                        ? match.gameover.draw
+                                                            ? '和棋'
+                                                            : `${match.gameover.winner === Side.Red ? '红方' : '黑方'}胜`
                                                         : `执${match.playerID === '0' ? '红' : '黑'}`}
                                                     {match.expiresAt &&
                                                         ` · 保留至 ${new Date(match.expiresAt).toLocaleString()}`}

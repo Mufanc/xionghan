@@ -177,3 +177,63 @@ it.each([1, 2])(
         expect(client.getState()!.G.takeback?.playerID).toBe('1');
     },
 );
+
+it('blocks draw and resignation until both opening plies have been played', () => {
+    const client = game();
+    for (const opening of [false, true]) {
+        if (opening) client.moves.move(...red);
+        client.moves.resign();
+        client.moves.offerDraw();
+        expect(client.getState()!.ctx.gameover).toBeUndefined();
+        expect(client.getState()!.G.drawOffer).toBeUndefined();
+    }
+    client.updatePlayerID('1');
+    client.moves.move(...black);
+    client.moves.resign();
+    expect(client.getState()!.ctx.gameover).toEqual({ winner: Side.Red, reason: 'resign' });
+});
+
+it('negotiates a draw without advancing the turn and excludes takeback requests', () => {
+    const client = game();
+    client.moves.move(...red);
+    client.updatePlayerID('1');
+    client.moves.move(...black);
+    client.moves.offerDraw();
+    const offer = client.getState()!.G.drawOffer!;
+    expect(client.getState()!.ctx.currentPlayer).toBe('0');
+    client.moves.respondDraw(offer.id, true);
+    expect(client.getState()!.ctx.gameover).toBeUndefined();
+    client.updatePlayerID('0');
+    client.moves.requestTakeback();
+    expect(client.getState()!.G.takeback).toBeUndefined();
+    client.moves.respondDraw(offer.id + 1, true);
+    expect(client.getState()!.ctx.gameover).toBeUndefined();
+    client.moves.respondDraw(offer.id, true);
+    expect(client.getState()!.ctx.gameover).toEqual({ draw: true, reason: 'agreement' });
+    expect(client.getState()!.G.drawOffer).toBeUndefined();
+});
+
+it('expires draw offers and requires a new move before offering again', () => {
+    vi.useFakeTimers();
+    const client = game();
+    client.moves.move(...red);
+    client.updatePlayerID('1');
+    client.moves.move(...black);
+    client.moves.offerDraw();
+    const offer = client.getState()!.G.drawOffer!;
+    vi.advanceTimersByTime(10001);
+    client.updatePlayerID('0');
+    client.moves.respondDraw(offer.id, true);
+    expect(client.getState()!.ctx.gameover).toBeUndefined();
+    client.updatePlayerID('1');
+    client.moves.offerDraw();
+    expect(client.getState()!.G.drawSerial).toBe(1);
+    client.updatePlayerID('0');
+    client.moves.move(p(6, 8), p(6, 5));
+    client.updatePlayerID('1');
+    client.moves.move(p(8, 4), p(8, 7));
+    client.moves.offerDraw();
+    expect(client.getState()!.G.drawSerial).toBe(2);
+    client.moves.resign();
+    expect(client.getState()!.G.drawOffer).toBeUndefined();
+});

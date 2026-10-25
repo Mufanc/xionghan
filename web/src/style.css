@@ -971,3 +971,9 @@ i {
     outline: 2px solid var(--ui-accent, #917756);
     outline-offset: 2px;
 }
+
+.online-menu {
+    inset: auto;
+    margin: 0;
+    max-width: calc(100vw - 32px);
+}

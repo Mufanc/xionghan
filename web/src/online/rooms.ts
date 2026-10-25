@@ -13,7 +13,7 @@ export interface MyMatch {
     matchID: string;
     playerID: '0' | '1';
     players: { id: number; name?: string }[];
-    gameover: { winner: Side } | null;
+    gameover: { winner?: Side; draw?: boolean; reason?: string } | null;
     updatedAt: number;
     expiresAt: number | null;
 }
