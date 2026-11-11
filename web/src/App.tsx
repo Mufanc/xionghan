@@ -576,7 +576,7 @@ function GameBoard({
             id: 'online',
             label: '联机',
             emphasis: 'primary',
-            placement: !online && !editor ? 'toolbar' : 'hidden',
+            placement: 'hidden',
             onClick: onOpenOnline,
         },
         {
